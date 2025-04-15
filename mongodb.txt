@@ -1,0 +1,8 @@
+
+UserID: cafeuser
+Pass: cafepass123 
+
+
+Connection string
+
+mongodb+srv://cafeuser:<db_password>@cluster0.kggh8.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
