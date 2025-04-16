@@ -19,7 +19,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/menu', menuRoutes);
 
 // MongoDB connection
-mongoose.connect('mongodb://localhost:27017/cafeDB', {
+mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
