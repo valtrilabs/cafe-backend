@@ -3,6 +3,45 @@ const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
 
+// POST /api/orders/qr-session - Initialize QR session
+router.post('/qr-session', async (req, res) => {
+  try {
+    const { tableNumber, token } = req.body;
+    if (!tableNumber || !token) {
+      return res.status(400).json({ error: 'Table number and token are required' });
+    }
+    // In a real system, validate token against a stored value or database
+    // For simplicity, assume token is valid if it matches a pattern (e.g., UUID)
+    const isValidToken = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
+    if (!isValidToken) {
+      return res.status(400).json({ error: 'Invalid token format' });
+    }
+    res.json({ valid: true });
+  } catch (err) {
+    console.error('Error initializing QR session:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/orders/qr-session - Validate QR session
+router.get('/qr-session', async (req, res) => {
+  try {
+    const { tableNumber, token } = req.query;
+    if (!tableNumber || !token) {
+      return res.status(400).json({ error: 'Table number and token are required' });
+    }
+    // Validate token (same logic as POST /qr-session)
+    const isValidToken = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
+    if (!isValidToken) {
+      return res.status(400).json({ error: 'Invalid token' });
+    }
+    res.json({ valid: true });
+  } catch (err) {
+    console.error('Error validating QR session:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
@@ -11,6 +50,16 @@ router.post('/', async (req, res) => {
     if (!tableNumber || !items || items.length === 0) {
       return res.status(400).json({ error: 'Invalid order data' });
     }
+
+    // Check for active orders (Pending or Prepared) for the table
+    const activeOrders = await Order.find({
+      tableNumber,
+      status: { $in: ['Pending', 'Prepared'] }
+    });
+    if (activeOrders.length > 0) {
+      return res.status(400).json({ error: 'An active order already exists for this table. Please wait until it is prepared.' });
+    }
+
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
@@ -20,7 +69,8 @@ router.post('/', async (req, res) => {
     const order = new Order({
       tableNumber,
       items,
-      status: 'Pending'
+      status: 'Pending',
+      orderNumber: Math.floor(1000 + Math.random() * 9000) // Simple random order number
     });
     await order.save();
     console.log('Order saved:', order);
@@ -31,10 +81,10 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/orders - Fetch orders with optional date filter
+// GET /api/orders - Fetch orders with optional filters
 router.get('/', async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, tableNumber, status } = req.query;
     let query = {};
     if (date === 'today') {
       const start = new Date();
@@ -45,6 +95,12 @@ router.get('/', async (req, res) => {
     } else if (date === 'past48') {
       const start = new Date(Date.now() - 48 * 60 * 60 * 1000);
       query.createdAt = { $gte: start };
+    }
+    if (tableNumber) {
+      query.tableNumber = parseInt(tableNumber);
+    }
+    if (status === 'active') {
+      query.status = { $in: ['Pending', 'Prepared'] };
     }
     const orders = await Order.find(query)
       .populate({
