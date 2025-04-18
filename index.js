@@ -1,32 +1,33 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
-const path = require('path');
-const orderRoutes = require('./routes/orders');
+const mongoose = require('mongoose');
 const menuRoutes = require('./routes/menu');
-require('./models/Session'); // Ensure Session model is registered
+const orderRoutes = require('./routes/orders');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// CORS configuration
+app.use(cors({
+  origin: 'https://cafe-frontend-pi.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type']
+}));
 app.use(express.json());
 
-// Serve static files from the public/uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Serve static files for menu item images
+app.use('/uploads', express.static('public/uploads'));
 
 // Routes
-app.use('/api/orders', orderRoutes);
 app.use('/api/menu', menuRoutes);
+app.use('/api/orders', orderRoutes);
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => console.log('Connected to MongoDB'))
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+module.exports = app;
