@@ -64,6 +64,29 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/orders/:id - Fetch a single order by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate({
+        path: 'items.itemId',
+        match: { _id: { $exists: true } }
+      });
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const cleanedOrder = {
+      ...order.toObject(),
+      items: order.items.filter(item => item.itemId)
+    };
+    console.log('Order fetched:', cleanedOrder);
+    res.json(cleanedOrder);
+  } catch (err) {
+    console.error('Error fetching order:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // PUT /api/orders/:id - Update order
 router.put('/:id', async (req, res) => {
   try {
