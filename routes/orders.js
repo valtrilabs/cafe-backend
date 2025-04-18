@@ -2,62 +2,22 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
+const Session = require('../models/Session');
+const { v4: uuidv4 } = require('uuid');
 
-// POST /api/orders/qr-session - Initialize QR session
-router.post('/qr-session', async (req, res) => {
-  try {
-    const { tableNumber, token } = req.body;
-    if (!tableNumber || !token) {
-      return res.status(400).json({ error: 'Table number and token are required' });
-    }
-    // In a real system, validate token against a stored value or database
-    // For simplicity, assume token is valid if it matches a pattern (e.g., UUID)
-    const isValidToken = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
-    if (!isValidToken) {
-      return res.status(400).json({ error: 'Invalid token format' });
-    }
-    res.json({ valid: true });
-  } catch (err) {
-    console.error('Error initializing QR session:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// GET /api/orders/qr-session - Validate QR session
-router.get('/qr-session', async (req, res) => {
-  try {
-    const { tableNumber, token } = req.query;
-    if (!tableNumber || !token) {
-      return res.status(400).json({ error: 'Table number and token are required' });
-    }
-    // Validate token (same logic as POST /qr-session)
-    const isValidToken = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
-    if (!isValidToken) {
-      return res.status(400).json({ error: 'Invalid token' });
-    }
-    res.json({ valid: true });
-  } catch (err) {
-    console.error('Error validating QR session:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// POST /api/orders - Create a new order
+// POST /api/orders - Create a new order with session
 router.post('/', async (req, res) => {
   try {
     console.log('Received order:', req.body);
-    const { tableNumber, items } = req.body;
-    if (!tableNumber || !items || items.length === 0) {
-      return res.status(400).json({ error: 'Invalid order data' });
+    const { tableNumber, items, sessionToken } = req.body;
+    if (!tableNumber || !items || items.length === 0 || !sessionToken) {
+      return res.status(400).json({ error: 'Invalid order data or session token' });
     }
 
-    // Check for active orders (Pending or Prepared) for the table
-    const activeOrders = await Order.find({
-      tableNumber,
-      status: { $in: ['Pending', 'Prepared'] }
-    });
-    if (activeOrders.length > 0) {
-      return res.status(400).json({ error: 'An active order already exists for this table. Please wait until it is prepared.' });
+    // Validate session
+    const session = await Session.findOne({ token: sessionToken, tableNumber, isActive: true });
+    if (!session) {
+      return res.status(403).json({ error: 'Invalid or expired session. Please scan QR code again.' });
     }
 
     for (const item of items) {
@@ -66,11 +26,13 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
     }
+
     const order = new Order({
       tableNumber,
       items,
       status: 'Pending',
-      orderNumber: Math.floor(1000 + Math.random() * 9000) // Simple random order number
+      sessionId: session._id,
+      paymentMethod: req.body.paymentMethod || 'Other'
     });
     await order.save();
     console.log('Order saved:', order);
@@ -81,10 +43,10 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/orders - Fetch orders with optional filters
+// GET /api/orders - Fetch orders with optional date filter
 router.get('/', async (req, res) => {
   try {
-    const { date, tableNumber, status } = req.query;
+    const { date, dateFrom, dateTo } = req.query;
     let query = {};
     if (date === 'today') {
       const start = new Date();
@@ -95,12 +57,8 @@ router.get('/', async (req, res) => {
     } else if (date === 'past48') {
       const start = new Date(Date.now() - 48 * 60 * 60 * 1000);
       query.createdAt = { $gte: start };
-    }
-    if (tableNumber) {
-      query.tableNumber = parseInt(tableNumber);
-    }
-    if (status === 'active') {
-      query.status = { $in: ['Pending', 'Prepared'] };
+    } else if (dateFrom && dateTo) {
+      query.createdAt = { $gte: new Date(dateFrom), $lte: new Date(dateTo) };
     }
     const orders = await Order.find(query)
       .populate({
@@ -120,33 +78,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/orders/:id - Fetch a single order by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id)
-      .populate({
-        path: 'items.itemId',
-        match: { _id: { $exists: true } }
-      });
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    const cleanedOrder = {
-      ...order.toObject(),
-      items: order.items.filter(item => item.itemId)
-    };
-    console.log('Order fetched:', cleanedOrder);
-    res.json(cleanedOrder);
-  } catch (err) {
-    console.error('Error fetching order:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// PUT /api/orders/:id - Update order
+// PUT /api/orders/:id - Update order and expire session if moving to Prepared
 router.put('/:id', async (req, res) => {
   try {
-    const { tableNumber, items, status } = req.body;
+    const { tableNumber, items, status, paymentMethod } = req.body;
     const updateData = {};
     if (tableNumber) updateData.tableNumber = tableNumber;
     if (items) {
@@ -159,16 +94,25 @@ router.put('/:id', async (req, res) => {
       updateData.items = items;
     }
     if (status) updateData.status = status;
-    const order = await Order.findByIdAndUpdate(
+    if (paymentMethod) updateData.paymentMethod = paymentMethod;
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Expire session if status changes to Prepared
+    if (status === 'Prepared' && order.status === 'Pending') {
+      await Session.findByIdAndUpdate(order.sessionId, { isActive: false });
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true }
     ).populate('items.itemId');
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    console.log('Order updated:', order);
-    res.json(order);
+    console.log('Order updated:', updatedOrder);
+    res.json(updatedOrder);
   } catch (err) {
     console.error('Error updating order:', err);
     res.status(500).json({ error: 'Server error' });
@@ -249,7 +193,7 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => b.quantity - a.quantity)
+      .sort((a, b) => b.quantity - b.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity, revenue: i.revenue }));
 
@@ -274,7 +218,7 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => a.quantity - a.quantity)
+      .sort((a, b) => a.quantity - b.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity }));
 
@@ -320,28 +264,74 @@ router.get('/analytics', async (req, res) => {
   }
 });
 
+// POST /api/orders/session - Create a new session
+router.post('/session', async (req, res) => {
+  try {
+    const { tableNumber } = req.body;
+    if (!tableNumber) {
+      return res.status(400).json({ error: 'Table number is required' });
+    }
+    const token = uuidv4();
+    const session = new Session({
+      tableNumber,
+      token,
+      isActive: true
+    });
+    await session.save();
+    res.status(201).json({ token });
+  } catch (err) {
+    console.error('Error creating session:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/orders/session/:token - Validate session
+router.get('/session/:token', async (req, res) => {
+  try {
+    const session = await Session.findOne({ token: req.params.token, isActive: true });
+    if (!session) {
+      return res.status(403).json({ error: 'Invalid or expired session' });
+    }
+    res.json({ tableNumber: session.tableNumber });
+  } catch (err) {
+    console.error('Error validating session:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // GET /api/orders/export - Export orders for custom date range
 router.get('/export', async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    if (!startDate || !endDate) {
-      return res.status(400).json({ error: 'Start and end dates are required' });
-    }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return res.status(400).json({ error: 'Invalid date format' });
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      return res.status(400).json({ error: 'dateFrom and dateTo are required' });
     }
     const orders = await Order.find({
-      createdAt: { $gte: start, $lte: end }
-    })
-      .populate('items.itemId')
-      .sort({ createdAt: -1 });
-    const cleanedOrders = orders.map(order => ({
-      ...order.toObject(),
-      items: order.items.filter(item => item.itemId)
-    }));
-    res.json(cleanedOrders);
+      createdAt: { $gte: new Date(dateFrom), $lte: new Date(dateTo) }
+    }).populate('items.itemId');
+
+    const csvContent = [
+      ['Order Number', 'Table Number', 'Items', 'Quantities', 'Total Amount', 'Date', 'Status', 'Payment Method'],
+      ...orders.map(order => {
+        const items = order.items.map(i => i.itemId ? i.itemId.name : '[Deleted Item]').join('; ');
+        const quantities = order.items.map(i => i.quantity).join('; ');
+        const total = order.items.reduce((sum, i) => sum + (i.itemId ? i.quantity * i.itemId.price : 0), 0).toFixed(2);
+        return [
+          order.orderNumber,
+          order.tableNumber,
+          `"${items}"`,
+          `"${quantities}"`,
+          total,
+          new Date(order.createdAt).toISOString(),
+          order.status,
+          order.paymentMethod
+        ].join(',');
+      })
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="orders_${dateFrom}_${dateTo}.csv"`);
+    res.send(csvContent);
   } catch (err) {
     console.error('Error exporting orders:', err);
     res.status(500).json({ error: 'Server error' });

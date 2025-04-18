@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const orderSchema = new mongoose.Schema({
   tableNumber: { type: Number, required: true },
   orderNumber: { type: Number, unique: true },
+  sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' }, // Reference to session
   items: [
     {
       itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem', required: true },
@@ -10,6 +11,7 @@ const orderSchema = new mongoose.Schema({
     }
   ],
   status: { type: String, default: 'Pending', enum: ['Pending', 'Prepared', 'Completed'] },
+  paymentMethod: { type: String, enum: ['Cash', 'Card', 'UPI', 'Other'], default: 'Other' }, // New field
   createdAt: { type: Date, default: Date.now }
 });
 

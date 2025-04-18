@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const orderRoutes = require('./routes/orders');
 const menuRoutes = require('./routes/menu');
-const staffCallRoutes = require('./routes/staffCalls'); // Add staff call routes
+require('./models/Session'); // Ensure Session model is registered
 
 const app = express();
 
@@ -18,7 +18,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 // Routes
 app.use('/api/orders', orderRoutes);
 app.use('/api/menu', menuRoutes);
-app.use('/api/staff-calls', staffCallRoutes); // Add staff call routes
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, {
