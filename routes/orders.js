@@ -195,7 +195,7 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => a.quantity - b.quantity)
+      .sort((a, b) => a.quantity - a.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity }));
 
@@ -237,6 +237,34 @@ router.get('/analytics', async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching analytics:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/orders/export - Export orders for custom date range
+router.get('/export', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'Start and end dates are required' });
+    }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+    const orders = await Order.find({
+      createdAt: { $gte: start, $lte: end }
+    })
+      .populate('items.itemId')
+      .sort({ createdAt: -1 });
+    const cleanedOrders = orders.map(order => ({
+      ...order.toObject(),
+      items: order.items.filter(item => item.itemId)
+    }));
+    res.json(cleanedOrders);
+  } catch (err) {
+    console.error('Error exporting orders:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
