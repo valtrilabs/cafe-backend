@@ -288,7 +288,7 @@ router.get('/analytics', async (req, res) => {
 // POST /api/orders/session - Create a new session
 router.post('/session', async (req, res) => {
   try {
-    const { tableNumber } = req.body;
+    const { tableNumber, forceNew } = req.body;
     if (!tableNumber || isNaN(tableNumber)) {
       return res.status(400).json({ error: 'Invalid table number' });
     }
@@ -297,14 +297,14 @@ router.post('/session', async (req, res) => {
     const latestOrder = await Order.findOne({ tableNumber }).sort({ createdAt: -1 });
     const isOrderFinal = latestOrder && ['Prepared', 'Completed'].includes(latestOrder.status);
 
-    // Invalidate existing sessions if the latest order is Prepared or Completed
-    if (isOrderFinal) {
+    // Invalidate existing sessions if forceNew is true or latest order is Prepared/Completed
+    if (forceNew || isOrderFinal) {
       await Session.updateMany({ tableNumber, isActive: true }, { isActive: false });
     }
 
     // Check for an active session
     const existingSession = await Session.findOne({ tableNumber, isActive: true });
-    if (existingSession && !isOrderFinal) {
+    if (existingSession && !forceNew && !isOrderFinal) {
       return res.json({ token: existingSession.token });
     }
 
