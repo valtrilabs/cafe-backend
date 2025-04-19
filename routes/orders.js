@@ -14,14 +14,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid order data' });
     }
 
-    // In POST /api/orders
-// const lastOrder = await Order.findOne().sort({ orderNumber: -1 });
-// const orderNumber = lastOrder ? lastOrder.orderNumber + 1 : 1000;
-// const order = new Order({
-//   tableNumber,
-//   items,
-//   status: 'Pending',
-//   session
+    // Generate sequential order number
+    const lastOrder = await Order.findOne().sort({ orderNumber: -1 });
+    const orderNumber = lastOrder ? lastOrder.orderNumber + 1 : 1000;
 
     // Validate session for non-manual orders
     let sessionId = null;
@@ -35,7 +30,7 @@ router.post('/', async (req, res) => {
       }
       sessionId = session._id;
     } else {
-      // For manual orders, create a temporary session if none provided
+      // For manual orders, create a temporary session
       const session = new Session({
         tableNumber,
         token: uuidv4(),
@@ -45,6 +40,7 @@ router.post('/', async (req, res) => {
       sessionId = session._id;
     }
 
+    // Validate menu items
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
@@ -57,7 +53,8 @@ router.post('/', async (req, res) => {
       items,
       status: 'Pending',
       sessionId,
-      paymentMethod: req.body.paymentMethod || 'Other'
+      paymentMethod: req.body.paymentMethod || 'Other',
+      orderNumber
     });
     await order.save();
     console.log('Order saved:', order);
@@ -103,7 +100,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /api/orders/:id - Update order and expire session if moving to Prepared
+// PUT /api/orders/:id - Update order and expire session if moving to Prepared or Completed
 router.put('/:id', async (req, res) => {
   try {
     const { tableNumber, items, status, paymentMethod } = req.body;
@@ -126,8 +123,8 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Expire session if status changes to Prepared
-    if (status === 'Prepared' && order.status === 'Pending') {
+    // Expire session if status changes to Prepared or Completed
+    if (['Prepared', 'Completed'].includes(status) && order.status === 'Pending') {
       await Session.findByIdAndUpdate(order.sessionId, { isActive: false });
     }
 
@@ -293,9 +290,26 @@ router.get('/analytics', async (req, res) => {
 router.post('/session', async (req, res) => {
   try {
     const { tableNumber } = req.body;
-    if (!tableNumber) {
-      return res.status(400).json({ error: 'Table number is required' });
+    if (!tableNumber || isNaN(tableNumber)) {
+      return res.status(400).json({ error: 'Invalid table number' });
     }
+
+    // Check the latest order for the table
+    const latestOrder = await Order.findOne({ tableNumber }).sort({ createdAt: -1 });
+    const isOrderFinal = latestOrder && ['Prepared', 'Completed'].includes(latestOrder.status);
+
+    // Invalidate existing sessions if the latest order is Prepared or Completed
+    if (isOrderFinal) {
+      await Session.updateMany({ tableNumber, isActive: true }, { isActive: false });
+    }
+
+    // Check for an active session
+    const existingSession = await Session.findOne({ tableNumber, isActive: true });
+    if (existingSession && !isOrderFinal) {
+      return res.json({ token: existingSession.token });
+    }
+
+    // Create a new session
     const token = uuidv4();
     const session = new Session({
       tableNumber,
