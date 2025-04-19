@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
+const Session = require('../models/Session');
 
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
@@ -18,6 +19,12 @@ router.post('/', async (req, res) => {
         console.log('Invalid itemId:', item.itemId);
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
+    }
+    // Validate sessionToken
+    const session = await Session.findOne({ sessionToken, tableNumber, isActive: true });
+    if (!session) {
+      console.log('Invalid or inactive session:', sessionToken);
+      return res.status(400).json({ error: 'Invalid or expired session. Please scan the QR code again.' });
     }
     // Check for existing Pending order with the same sessionToken
     const existingPendingOrder = await Order.findOne({
@@ -123,6 +130,11 @@ router.put('/:id', async (req, res) => {
     ).populate('items.itemId');
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+    // Invalidate session if order is Prepared or Completed
+    if (status === 'Prepared' || status === 'Completed') {
+      await Session.updateOne({ sessionToken: order.sessionToken }, { isActive: false });
+      console.log('Session invalidated for token:', order.sessionToken);
     }
     console.log('Order updated:', order);
     res.json(order);
