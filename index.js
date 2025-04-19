@@ -3,6 +3,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const menuRoutes = require('./routes/menu');
 const orderRoutes = require('./routes/orders');
+const sessionRoutes = require('./routes/sessions');
+const tableRoutes = require('./routes/tables'); // Add this line
 
 const app = express();
 
@@ -20,6 +22,8 @@ app.use('/uploads', express.static('public/uploads'));
 // Routes
 app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/tables', tableRoutes); // Add this line
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
