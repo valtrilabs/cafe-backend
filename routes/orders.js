@@ -9,11 +9,13 @@ router.post('/', async (req, res) => {
     console.log('Received order:', req.body);
     const { tableNumber, items } = req.body;
     if (!tableNumber || !items || items.length === 0) {
+      console.log('Invalid order data:', { tableNumber, items });
       return res.status(400).json({ error: 'Invalid order data' });
     }
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
+        console.log('Invalid itemId:', item.itemId);
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
     }
@@ -26,8 +28,8 @@ router.post('/', async (req, res) => {
     console.log('Order saved:', order);
     res.status(201).json(order);
   } catch (err) {
-    console.error('Error saving order:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error saving order:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
@@ -37,7 +39,6 @@ router.get('/', async (req, res) => {
     const { date, tableNumber, dateFrom, dateTo } = req.query;
     let query = {};
 
-    // Date filters
     if (date === 'today') {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -54,7 +55,6 @@ router.get('/', async (req, res) => {
       };
     }
 
-    // Table number filter
     if (tableNumber) {
       query.tableNumber = parseInt(tableNumber);
     }
@@ -72,8 +72,8 @@ router.get('/', async (req, res) => {
     console.log('Orders sent:', cleanedOrders);
     res.json(cleanedOrders);
   } catch (err) {
-    console.error('Error fetching orders:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error fetching orders:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
@@ -87,6 +87,7 @@ router.put('/:id', async (req, res) => {
       for (const item of items) {
         const menuItem = await MenuItem.findById(item.itemId);
         if (!menuItem) {
+          console.log('Invalid itemId:', item.itemId);
           return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
         }
       }
@@ -104,8 +105,8 @@ router.put('/:id', async (req, res) => {
     console.log('Order updated:', order);
     res.json(order);
   } catch (err) {
-    console.error('Error updating order:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error updating order:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
@@ -119,8 +120,8 @@ router.delete('/:id', async (req, res) => {
     console.log('Order canceled:', order);
     res.json({ message: 'Order canceled' });
   } catch (err) {
-    console.error('Error canceling order:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error canceling order:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
@@ -134,10 +135,8 @@ router.get('/analytics', async (req, res) => {
     weekStart.setHours(0, 0, 0, 0);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Fetch orders
     const orders = await Order.find({}).populate('items.itemId');
 
-    // Revenue
     const revenue = {
       today: 0,
       week: 0,
@@ -153,7 +152,6 @@ router.get('/analytics', async (req, res) => {
       }
     });
 
-    // Order Count
     const orderCount = {
       total: orders.filter(o => new Date(o.createdAt) >= todayStart).length,
       pending: orders.filter(o => new Date(o.createdAt) >= todayStart && o.status === 'Pending').length,
@@ -161,7 +159,6 @@ router.get('/analytics', async (req, res) => {
       completed: orders.filter(o => new Date(o.createdAt) >= todayStart && o.status === 'Completed').length
     };
 
-    // Top 5 Items (Month)
     const itemCountsMonth = {};
     orders
       .filter(o => new Date(o.createdAt) >= monthStart && o.status === 'Completed')
@@ -169,7 +166,7 @@ router.get('/analytics', async (req, res) => {
         order.items.forEach(item => {
           if (item.itemId) {
             const itemId = item.itemId._id.toString();
-            itemCountsMonth[itemId] = (itemCountsMonth[itemId] || { quantity: 0, revenue: 0 });
+            itemthumbsMonth[itemId] = (itemCountsMonth[itemId] || { quantity: 0, revenue: 0 });
             itemCountsMonth[itemId].quantity += item.quantity;
             itemCountsMonth[itemId].revenue += item.quantity * item.itemId.price;
           }
@@ -187,7 +184,6 @@ router.get('/analytics', async (req, res) => {
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity, revenue: i.revenue }));
 
-    // Slow-Moving Items (Week)
     const itemCountsWeek = {};
     orders
       .filter(o => new Date(o.createdAt) >= weekStart && o.status === 'Completed')
@@ -208,11 +204,10 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => a.quantity - a.quantity)
+      .sort((a, b) => a.quantity - b.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity }));
 
-    // Peak Hours (Today)
     const peakHours = Array(24).fill(0);
     orders
       .filter(o => new Date(o.createdAt) >= todayStart)
@@ -225,7 +220,6 @@ router.get('/analytics', async (req, res) => {
       orders: count
     }));
 
-    // Category Performance (Month)
     const categoryRevenue = {};
     orders
       .filter(o => new Date(o.createdAt) >= monthStart && o.status === 'Completed')
@@ -249,8 +243,8 @@ router.get('/analytics', async (req, res) => {
       categories: categoryData
     });
   } catch (err) {
-    console.error('Error fetching analytics:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error fetching analytics:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
 
