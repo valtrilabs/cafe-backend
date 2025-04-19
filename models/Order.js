@@ -15,14 +15,16 @@ const orderSchema = new mongoose.Schema({
 
 orderSchema.pre('save', async function (next) {
   try {
+    console.log('Running pre-save hook for order:', this);
     if (this.isNew && !this.orderNumber) {
-      const lastOrder = await this.constructor.findOne().sort({ orderNumber: -1 });
-      this.orderNumber = lastOrder && lastOrder.orderNumber ? lastOrder.orderNumber + 1 : 1000;
-      console.log('Generated orderNumber:', this.orderNumber);
+      const lastOrder = await this.constructor.findOne({}, { orderNumber: 1 }).sort({ orderNumber: -1 });
+      const newOrderNumber = lastOrder && lastOrder.orderNumber ? lastOrder.orderNumber + 1 : 1000;
+      console.log('Generated orderNumber:', newOrderNumber);
+      this.orderNumber = newOrderNumber;
     }
     next();
   } catch (err) {
-    console.error('Error generating orderNumber:', err);
+    console.error('Error in pre-save hook:', err.message, err.stack);
     next(err);
   }
 });

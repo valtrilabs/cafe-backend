@@ -24,6 +24,7 @@ router.post('/', async (req, res) => {
       items,
       status: 'Pending'
     });
+    console.log('Order before save:', order);
     await order.save();
     console.log('Order saved:', order);
     res.status(201).json(order);
@@ -166,7 +167,7 @@ router.get('/analytics', async (req, res) => {
         order.items.forEach(item => {
           if (item.itemId) {
             const itemId = item.itemId._id.toString();
-            itemthumbsMonth[itemId] = (itemCountsMonth[itemId] || { quantity: 0, revenue: 0 });
+            itemCountsMonth[itemId] = (itemCountsMonth[itemId] || { quantity: 0, revenue: 0 });
             itemCountsMonth[itemId].quantity += item.quantity;
             itemCountsMonth[itemId].revenue += item.quantity * item.itemId.price;
           }
@@ -180,7 +181,7 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => b.quantity - a.quantity)
+      .sort((a, b) => b.quantity - b.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity, revenue: i.revenue }));
 
