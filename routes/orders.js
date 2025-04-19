@@ -3,6 +3,12 @@ const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
 
+// Helper to generate unique orderNumber
+async function generateOrderNumber() {
+  const lastOrder = await Order.findOne().sort({ orderNumber: -1 });
+  return lastOrder ? lastOrder.orderNumber + 1 : 1;
+}
+
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
@@ -20,7 +26,8 @@ router.post('/', async (req, res) => {
     const order = new Order({
       tableNumber,
       items,
-      status: 'Pending'
+      status: 'Pending',
+      orderNumber: await generateOrderNumber()
     });
     await order.save();
     console.log('Order saved:', order);
@@ -31,11 +38,13 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/orders - Fetch orders with optional date filter
+// GET /api/orders - Fetch orders with optional filters
 router.get('/', async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, tableNumber, dateFrom, dateTo } = req.query;
     let query = {};
+    
+    // Date filters
     if (date === 'today') {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -45,13 +54,24 @@ router.get('/', async (req, res) => {
     } else if (date === 'past48') {
       const start = new Date(Date.now() - 48 * 60 * 60 * 1000);
       query.createdAt = { $gte: start };
+    } else if (dateFrom && dateTo) {
+      query.createdAt = {
+        $gte: new Date(dateFrom),
+        $lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999))
+      };
     }
+
+    // Table number filter
+    if (tableNumber) {
+      query.tableNumber = parseInt(tableNumber);
+    }
+
     const orders = await Order.find(query)
       .populate({
         path: 'items.itemId',
         match: { _id: { $exists: true } }
       })
-      .sort(date === 'today' ? { createdAt: -1 } : {});
+      .sort({ createdAt: -1 });
     const cleanedOrders = orders.map(order => ({
       ...order.toObject(),
       items: order.items.filter(item => item.itemId)
