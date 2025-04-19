@@ -6,7 +6,7 @@ const MenuItem = require('../models/MenuItem');
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
-    console.log('Received order:', req.body);
+    console.log('Received order:', JSON.stringify(req.body, null, 2));
     const { tableNumber, items } = req.body;
     if (!tableNumber || !items || items.length === 0) {
       console.log('Invalid order data:', { tableNumber, items });
@@ -24,9 +24,9 @@ router.post('/', async (req, res) => {
       items,
       status: 'Pending'
     });
-    console.log('Order before save:', order);
+    console.log('Order before save:', JSON.stringify(order.toObject(), null, 2));
     await order.save();
-    console.log('Order saved:', order);
+    console.log('Order saved:', JSON.stringify(order.toObject(), null, 2));
     res.status(201).json(order);
   } catch (err) {
     console.error('Error saving order:', err.message, err.stack);
