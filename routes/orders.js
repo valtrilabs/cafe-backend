@@ -3,12 +3,6 @@ const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
 
-// Helper to generate unique orderNumber
-async function generateOrderNumber() {
-  const lastOrder = await Order.findOne().sort({ orderNumber: -1 });
-  return lastOrder ? lastOrder.orderNumber + 1 : 1;
-}
-
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
@@ -26,8 +20,7 @@ router.post('/', async (req, res) => {
     const order = new Order({
       tableNumber,
       items,
-      status: 'Pending',
-      orderNumber: await generateOrderNumber()
+      status: 'Pending'
     });
     await order.save();
     console.log('Order saved:', order);
@@ -43,7 +36,7 @@ router.get('/', async (req, res) => {
   try {
     const { date, tableNumber, dateFrom, dateTo } = req.query;
     let query = {};
-    
+
     // Date filters
     if (date === 'today') {
       const start = new Date();
@@ -215,7 +208,7 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => a.quantity - b.quantity)
+      .sort((a, b) => a.quantity - a.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity }));
 

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
   tableNumber: { type: Number, required: true },
-  orderNumber: { type: Number, unique: true },
+  orderNumber: { type: Number, unique: true, required: true },
   items: [
     {
       itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem', required: true },
