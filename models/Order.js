@@ -14,11 +14,17 @@ const orderSchema = new mongoose.Schema({
 });
 
 orderSchema.pre('save', async function (next) {
-  if (!this.orderNumber) {
-    const lastOrder = await this.constructor.findOne().sort({ orderNumber: -1 });
-    this.orderNumber = lastOrder && lastOrder.orderNumber ? lastOrder.orderNumber + 1 : 1000;
+  try {
+    if (this.isNew && !this.orderNumber) {
+      const lastOrder = await this.constructor.findOne().sort({ orderNumber: -1 });
+      this.orderNumber = lastOrder && lastOrder.orderNumber ? lastOrder.orderNumber + 1 : 1000;
+      console.log('Generated orderNumber:', this.orderNumber);
+    }
+    next();
+  } catch (err) {
+    console.error('Error generating orderNumber:', err);
+    next(err);
   }
-  next();
 });
 
 module.exports = mongoose.model('Order', orderSchema);
