@@ -2,17 +2,20 @@ const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
 
-router.post('/', async (req, res) => {
+// DELETE /api/sessions/:token - Invalidate a specific session
+router.delete('/:token', async (req, res) => {
   try {
-    const { tableNumber } = req.body;
-    if (!tableNumber || isNaN(tableNumber)) {
-      return res.status(400).json({ error: 'Invalid table number' });
+    const session = await Session.findOneAndUpdate(
+      { token: req.params.token, isActive: true },
+      { isActive: false },
+      { new: true }
+    );
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or already inactive' });
     }
-    const session = new Session({ tableNumber: parseInt(tableNumber) });
-    await session.save();
-    res.status(201).json(session);
+    res.json({ message: 'Session invalidated' });
   } catch (err) {
-    console.error('Session creation error:', err);
+    console.error('Session invalidation error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

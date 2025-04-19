@@ -40,7 +40,6 @@ router.post('/', async (req, res) => {
       sessionId = session._id;
     }
 
-    // Validate menu items
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
@@ -124,7 +123,7 @@ router.put('/:id', async (req, res) => {
     }
 
     // Expire session if status changes to Prepared or Completed
-    if (['Prepared', 'Completed'].includes(status) && order.status === 'Pending') {
+    if ((status === 'Prepared' || status === 'Completed') && order.status === 'Pending') {
       await Session.findByIdAndUpdate(order.sessionId, { isActive: false });
     }
 
@@ -356,7 +355,7 @@ router.get('/export', async (req, res) => {
         const quantities = order.items.map(i => i.quantity).join('; ');
         const total = order.items.reduce((sum, i) => sum + (i.itemId ? i.quantity * i.itemId.price : 0), 0).toFixed(2);
         return [
-          order.orderNumber,
+          order.orderNumber || 'N/A',
           order.tableNumber,
           `"${items}"`,
           `"${quantities}"`,
