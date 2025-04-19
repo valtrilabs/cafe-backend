@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
   tableNumber: { type: Number, required: true },
-  orderNumber: { type: Number, required: true }, // Removed unique: true temporarily
-  sessionToken: { type: String }, // Added for session management
+  orderNumber: { type: Number }, // Removed required: true temporarily
+  sessionToken: { type: String },
   items: [
     {
       itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem', required: true },
@@ -16,8 +16,9 @@ const orderSchema = new mongoose.Schema({
 
 orderSchema.pre('save', async function (next) {
   try {
-    console.log('Running pre-save hook for order:', JSON.stringify(this.toObject(), null, 2));
+    console.log('Pre-save hook started for order:', JSON.stringify(this.toObject(), null, 2));
     if (this.isNew && !this.orderNumber) {
+      console.log('Generating new orderNumber');
       const lastOrder = await this.constructor
         .findOne({}, { orderNumber: 1 })
         .sort({ orderNumber: -1 })
@@ -31,6 +32,7 @@ orderSchema.pre('save', async function (next) {
     next();
   } catch (err) {
     console.error('Error in pre-save hook:', err.message, err.stack);
+    // Fallback: Set a random orderNumber
     this.orderNumber = Math.floor(1000 + Math.random() * 9000);
     console.log('Fallback orderNumber set:', this.orderNumber);
     next();

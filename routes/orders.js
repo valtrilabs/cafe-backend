@@ -6,7 +6,7 @@ const MenuItem = require('../models/MenuItem');
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
-    console.log('Received order:', JSON.stringify(req.body, null, 2));
+    console.log('Received order request:', JSON.stringify(req.body, null, 2));
     const { tableNumber, items, sessionToken } = req.body;
     if (!tableNumber || !items || items.length === 0 || !sessionToken) {
       console.log('Invalid order data:', { tableNumber, items, sessionToken });
@@ -34,9 +34,15 @@ router.post('/', async (req, res) => {
       sessionToken,
       status: 'Pending'
     });
+    // Fallback: Ensure orderNumber is set
+    if (!order.orderNumber) {
+      const lastOrder = await Order.findOne({}, { orderNumber: 1 }).sort({ orderNumber: -1 }).lean();
+      order.orderNumber = lastOrder && lastOrder.orderNumber ? lastOrder.orderNumber + 1 : 1000;
+      console.log('Fallback orderNumber set in route:', order.orderNumber);
+    }
     console.log('Order before save:', JSON.stringify(order.toObject(), null, 2));
     await order.save();
-    console.log('Order saved:', JSON.stringify(order.toObject(), null, 2));
+    console.log('Order saved successfully:', JSON.stringify(order.toObject(), null, 2));
     res.status(201).json(order);
   } catch (err) {
     console.error('Error saving order:', err.message, err.stack);
@@ -83,7 +89,7 @@ router.get('/', async (req, res) => {
       ...order.toObject(),
       items: order.items.filter(item => item.itemId)
     }));
-    console.log('Orders sent:', cleanedOrders);
+    console.log('Orders sent:', cleanedOrders.length);
     res.json(cleanedOrders);
   } catch (err) {
     console.error('Error fetching orders:', err.message, err.stack);
