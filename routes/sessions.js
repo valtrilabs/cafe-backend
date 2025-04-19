@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
+const crypto = require('crypto');
 
 // POST /api/sessions - Generate a new session token
 router.post('/', async (req, res) => {
@@ -21,7 +22,11 @@ router.post('/', async (req, res) => {
     );
 
     // Generate a unique session token
-    const sessionToken = Math.random().toString(36).substring(2);
+    const sessionToken = crypto.randomBytes(16).toString('hex');
+    if (!sessionToken) {
+      throw new Error('Failed to generate session token');
+    }
+
     const session = new Session({
       tableNumber: parsedTableNumber,
       sessionToken,
