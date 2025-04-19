@@ -9,15 +9,40 @@ const { v4: uuidv4 } = require('uuid');
 router.post('/', async (req, res) => {
   try {
     console.log('Received order:', req.body);
-    const { tableNumber, items, sessionToken } = req.body;
-    if (!tableNumber || !items || items.length === 0 || !sessionToken) {
-      return res.status(400).json({ error: 'Invalid order data or session token' });
+    const { tableNumber, items, sessionToken, isManual } = req.body;
+    if (!tableNumber || !items || items.length === 0) {
+      return res.status(400).json({ error: 'Invalid order data' });
     }
 
-    // Validate session
-    const session = await Session.findOne({ token: sessionToken, tableNumber, isActive: true });
-    if (!session) {
-      return res.status(403).json({ error: 'Invalid or expired session. Please scan QR code again.' });
+    // In POST /api/orders
+// const lastOrder = await Order.findOne().sort({ orderNumber: -1 });
+// const orderNumber = lastOrder ? lastOrder.orderNumber + 1 : 1000;
+// const order = new Order({
+//   tableNumber,
+//   items,
+//   status: 'Pending',
+//   session
+
+    // Validate session for non-manual orders
+    let sessionId = null;
+    if (!isManual) {
+      if (!sessionToken) {
+        return res.status(400).json({ error: 'Session token required for non-manual orders' });
+      }
+      const session = await Session.findOne({ token: sessionToken, tableNumber, isActive: true });
+      if (!session) {
+        return res.status(403).json({ error: 'Invalid or expired session. Please scan QR code again.' });
+      }
+      sessionId = session._id;
+    } else {
+      // For manual orders, create a temporary session if none provided
+      const session = new Session({
+        tableNumber,
+        token: uuidv4(),
+        isActive: true
+      });
+      await session.save();
+      sessionId = session._id;
     }
 
     for (const item of items) {
@@ -31,7 +56,7 @@ router.post('/', async (req, res) => {
       tableNumber,
       items,
       status: 'Pending',
-      sessionId: session._id,
+      sessionId,
       paymentMethod: req.body.paymentMethod || 'Other'
     });
     await order.save();
@@ -334,6 +359,22 @@ router.get('/export', async (req, res) => {
     res.send(csvContent);
   } catch (err) {
     console.error('Error exporting orders:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/orders/latest/:tableNumber - Fetch latest order for a table
+router.get('/latest/:tableNumber', async (req, res) => {
+  try {
+    const order = await Order.findOne({ tableNumber: req.params.tableNumber })
+      .sort({ createdAt: -1 })
+      .populate('items.itemId');
+    if (!order) {
+      return res.status(404).json({ error: 'No orders found' });
+    }
+    res.json(order);
+  } catch (err) {
+    console.error('Error fetching latest order:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
