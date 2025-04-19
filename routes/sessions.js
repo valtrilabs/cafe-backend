@@ -23,8 +23,8 @@ router.post('/', async (req, res) => {
 
     // Generate a unique session token
     const sessionToken = crypto.randomBytes(16).toString('hex');
-    if (!sessionToken) {
-      throw new Error('Failed to generate session token');
+    if (!sessionToken || sessionToken.length < 32) {
+      throw new Error('Failed to generate valid session token');
     }
 
     const session = new Session({
@@ -33,7 +33,7 @@ router.post('/', async (req, res) => {
       isActive: true
     });
     await session.save();
-    console.log('Session created:', session);
+    console.log('Session created:', { tableNumber: parsedTableNumber, sessionToken, isActive: true });
     res.status(201).json({ sessionToken });
   } catch (err) {
     console.error('Error creating session:', err.message, err.stack);
