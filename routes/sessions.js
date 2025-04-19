@@ -13,6 +13,13 @@ router.post('/', async (req, res) => {
     if (isNaN(parsedTableNumber) || parsedTableNumber < 1) {
       return res.status(400).json({ error: 'Invalid table number' });
     }
+
+    // Invalidate existing sessions for this table
+    await Session.updateMany(
+      { tableNumber: parsedTableNumber, isActive: true },
+      { isActive: false }
+    );
+
     // Generate a unique session token
     const sessionToken = Math.random().toString(36).substring(2);
     const session = new Session({
@@ -25,6 +32,9 @@ router.post('/', async (req, res) => {
     res.status(201).json({ sessionToken });
   } catch (err) {
     console.error('Error creating session:', err.message, err.stack);
+    if (err.code === 11000) {
+      return res.status(500).json({ error: 'Session token conflict. Please try again.' });
+    }
     res.status(500).json({ error: 'Server error', details: err.message });
   }
 });
