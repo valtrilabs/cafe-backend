@@ -19,20 +19,15 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
     }
-    // Check for existing orders
-    const existingOrder = await Order.findOne({
+    // Check for existing Pending order with the same sessionToken
+    const existingPendingOrder = await Order.findOne({
       tableNumber,
-      status: { $in: ['Pending', 'Prepared', 'Completed'] }
+      sessionToken,
+      status: 'Pending'
     });
-    if (existingOrder) {
-      if (existingOrder.status === 'Pending') {
-        console.log('Pending order exists for table:', tableNumber);
-        return res.status(400).json({ error: 'A pending order already exists for this session' });
-      }
-      if (existingOrder.status === 'Prepared' || existingOrder.status === 'Completed') {
-        console.log('Prepared/Completed order exists for table:', tableNumber);
-        return res.status(400).json({ error: 'Previous order is prepared or completed. Please scan the QR code again.' });
-      }
+    if (existingPendingOrder) {
+      console.log('Pending order exists for session:', sessionToken);
+      return res.status(400).json({ error: 'A pending order already exists for this session' });
     }
     const order = new Order({
       tableNumber,
