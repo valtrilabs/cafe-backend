@@ -7,9 +7,9 @@ const MenuItem = require('../models/MenuItem');
 router.post('/', async (req, res) => {
   try {
     console.log('Received order:', JSON.stringify(req.body, null, 2));
-    const { tableNumber, items } = req.body;
-    if (!tableNumber || !items || items.length === 0) {
-      console.log('Invalid order data:', { tableNumber, items });
+    const { tableNumber, items, sessionToken } = req.body;
+    if (!tableNumber || !items || items.length === 0 || !sessionToken) {
+      console.log('Invalid order data:', { tableNumber, items, sessionToken });
       return res.status(400).json({ error: 'Invalid order data' });
     }
     for (const item of items) {
@@ -19,9 +19,19 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
     }
+    const existingOrder = await Order.findOne({
+      tableNumber,
+      sessionToken,
+      status: 'Pending'
+    });
+    if (existingOrder) {
+      console.log('Pending order exists for session:', sessionToken);
+      return res.status(400).json({ error: 'A pending order already exists for this session' });
+    }
     const order = new Order({
       tableNumber,
       items,
+      sessionToken,
       status: 'Pending'
     });
     console.log('Order before save:', JSON.stringify(order.toObject(), null, 2));
@@ -37,7 +47,7 @@ router.post('/', async (req, res) => {
 // GET /api/orders - Fetch orders with optional filters
 router.get('/', async (req, res) => {
   try {
-    const { date, tableNumber, dateFrom, dateTo } = req.query;
+    const { date, tableNumber, dateFrom, dateTo, sessionToken } = req.query;
     let query = {};
 
     if (date === 'today') {
@@ -58,6 +68,9 @@ router.get('/', async (req, res) => {
 
     if (tableNumber) {
       query.tableNumber = parseInt(tableNumber);
+    }
+    if (sessionToken) {
+      query.sessionToken = sessionToken;
     }
 
     const orders = await Order.find(query)
@@ -81,7 +94,7 @@ router.get('/', async (req, res) => {
 // PUT /api/orders/:id - Update order
 router.put('/:id', async (req, res) => {
   try {
-    const { tableNumber, items, status } = req.body;
+    const { tableNumber, items, status, sessionToken } = req.body;
     const updateData = {};
     if (tableNumber) updateData.tableNumber = tableNumber;
     if (items) {
@@ -95,6 +108,7 @@ router.put('/:id', async (req, res) => {
       updateData.items = items;
     }
     if (status) updateData.status = status;
+    if (sessionToken) updateData.sessionToken = sessionToken;
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       updateData,
