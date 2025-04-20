@@ -1,54 +1,52 @@
 const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
-const crypto = require('crypto');
 
-// POST /api/sessions - Create a new session for a table
+// POST /api/session - Create a new session
 router.post('/', async (req, res) => {
   try {
-    const { tableNumber } = req.body;
-    if (!tableNumber) {
-      return res.status(400).json({ error: 'Table number is required' });
+    const { tableId, sessionToken } = req.body;
+    if (!tableId || !sessionToken) {
+      return res.status(400).json({ error: 'Table ID and session token are required' });
     }
 
     // Check if there's an active session for the table
-    let session = await Session.findOne({ tableNumber, isActive: true });
+    let session = await Session.findOne({ tableId, status: 'active' });
     if (session) {
-      return res.json({ token: session.token });
+      return res.json({ sessionToken: session.sessionToken });
     }
 
-    // Generate a unique token
-    const token = crypto.randomBytes(16).toString('hex');
+    // Create new session
     session = new Session({
-      tableNumber,
-      token,
-      isActive: true,
+      tableId,
+      sessionToken,
+      status: 'active'
     });
     await session.save();
-    res.status(201).json({ token });
+    res.status(201).json({ sessionToken });
   } catch (err) {
     console.error('Error creating session:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// GET /api/sessions/validate - Validate a session token
-router.get('/validate', async (req, res) => {
+// GET /api/session-status?table=5&session=abc123 - Check session status
+router.get('/status', async (req, res) => {
   try {
-    const { token, tableNumber } = req.query;
-    if (!token || !tableNumber) {
-      return res.status(400).json({ error: 'Token and table number are required' });
+    const { table, session } = req.query;
+    if (!table || !session) {
+      return res.status(400).json({ status: 'invalid', error: 'Table and session token are required' });
     }
 
-    const session = await Session.findOne({ token, tableNumber, isActive: true });
-    if (!session) {
-      return res.status(401).json({ error: 'Invalid or expired session. Please scan the QR code again.' });
+    const sessionRecord = await Session.findOne({ tableId: parseInt(table), sessionToken: session });
+    if (!sessionRecord) {
+      return res.status(404).json({ status: 'invalid', error: 'Session not found' });
     }
 
-    res.json({ valid: true });
+    res.json({ status: sessionRecord.status });
   } catch (err) {
-    console.error('Error validating session:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error checking session status:', err);
+    res.status(500).json({ status: 'invalid', error: 'Server error' });
   }
 });
 

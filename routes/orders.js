@@ -8,17 +8,18 @@ const Session = require('../models/Session');
 router.post('/', async (req, res) => {
   try {
     console.log('Received order:', req.body);
-    const { tableNumber, items, sessionToken } = req.body;
-    if (!tableNumber || !items || items.length === 0 || !sessionToken) {
-      return res.status(400).json({ error: 'Invalid order data or missing session token' });
+    const { tableId, items, sessionToken } = req.body;
+    if (!tableId || !items || items.length === 0 || !sessionToken) {
+      return res.status(400).json({ error: 'Table ID, items, and session token are required' });
     }
 
     // Validate session
-    const session = await Session.findOne({ tableNumber, token: sessionToken, isActive: true });
+    const session = await Session.findOne({ tableId: parseInt(tableId), sessionToken, status: 'active' });
     if (!session) {
-      return res.status(401).json({ error: 'Invalid or expired session. Please scan the QR code again.' });
+      return res.status(401).json({ error: 'Invalid or inactive session. Please scan the QR code again.' });
     }
 
+    // Validate menu items
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
@@ -26,18 +27,24 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Create order
     const order = new Order({
-      tableNumber,
+      tableNumber: parseInt(tableId),
       sessionId: session._id,
       items,
       status: 'Pending'
     });
     await order.save();
+
+    // Update session status to pending
+    session.status = 'pending';
+    await session.save();
+
     console.log('Order saved:', order);
     res.status(201).json(order);
   } catch (err) {
     console.error('Error saving order:', err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: `Failed to place order: ${err.message}` });
   }
 });
 
@@ -102,9 +109,9 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Revoke session if status is changed to Prepared or Completed
-    if (status === 'Prepared' || status === 'Completed') {
-      await Session.findByIdAndUpdate(order.sessionId, { isActive: false });
+    // Update session status if order is marked as Prepared
+    if (status === 'Prepared') {
+      await Session.findByIdAndUpdate(order.sessionId, { status: 'prepared' });
     }
 
     console.log('Order updated:', order);
@@ -122,8 +129,8 @@ router.delete('/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    // Revoke session on cancellation
-    await Session.findByIdAndUpdate(order.sessionId, { isActive: false });
+    // Update session status to expired on cancellation
+    await Session.findByIdAndUpdate(order.sessionId, { status: 'expired' });
     console.log('Order canceled:', order);
     res.json({ message: 'Order canceled' });
   } catch (err) {
