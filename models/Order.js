@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-  tableId: { type: Number, required: true },
+  tableNumber: { type: Number, required: true },
   orderNumber: { type: Number, unique: true },
-  sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true },
   items: [
     {
       itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem', required: true },
