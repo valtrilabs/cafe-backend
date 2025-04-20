@@ -33,10 +33,10 @@ router.get('/', async (req, res) => {
   try {
     const menuItems = await MenuItem.find();
     console.log('Menu items sent:', menuItems);
-    res.status(200).json(menuItems);
+    res.json(menuItems);
   } catch (err) {
-    console.error('Error fetching menu:', err.message, err.stack);
-    res.status(500).json({ error: 'Failed to fetch menu', details: err.message });
+    console.error('Error fetching menu:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -59,8 +59,8 @@ router.post('/', upload.single('image'), async (req, res) => {
     console.log('Menu item saved:', menuItem);
     res.status(201).json(menuItem);
   } catch (err) {
-    console.error('Error saving menu item:', err.message, err.stack);
-    res.status(500).json({ error: 'Failed to fetch menu', details: err.message });
+    console.error('Error saving menu item:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -85,8 +85,8 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     console.log('Menu item updated:', menuItem);
     res.json(menuItem);
   } catch (err) {
-    console.error('Error updating menu item:', err.message, err.stack);
-    res.status(500).json({ error: 'Failed to fetch menu', details: err.message });
+    console.error('Error updating menu item:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -100,8 +100,8 @@ router.delete('/:id', async (req, res) => {
     console.log('Menu item deleted:', menuItem);
     res.json({ message: 'Menu item deleted' });
   } catch (err) {
-    console.error('Error deleting menu item:', err.message, err.stack);
-    res.status(500).json({ error: 'Failed to fetch menu', details: err.message });
+    console.error('Error deleting menu item:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

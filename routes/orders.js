@@ -2,68 +2,40 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
-const Session = require('../models/Session');
 
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
-    console.log('Received order request:', JSON.stringify(req.body, null, 2));
-    const { tableNumber, items, sessionToken } = req.body;
-    if (!tableNumber || !items || items.length === 0 || !sessionToken) {
-      console.log('Invalid order data:', { tableNumber, items, sessionToken });
+    console.log('Received order:', req.body);
+    const { tableNumber, items } = req.body;
+    if (!tableNumber || !items || items.length === 0) {
       return res.status(400).json({ error: 'Invalid order data' });
     }
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
-        console.log('Invalid itemId:', item.itemId);
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
-    }
-    // Validate sessionToken
-    const session = await Session.findOne({ sessionToken, tableNumber, isActive: true });
-    if (!session) {
-      console.log('Invalid or inactive session:', sessionToken);
-      return res.status(400).json({ error: 'Invalid or expired session. Please scan the QR code again.' });
-    }
-    // Check for existing Pending order with the same sessionToken
-    const existingPendingOrder = await Order.findOne({
-      tableNumber,
-      sessionToken,
-      status: 'Pending'
-    });
-    if (existingPendingOrder) {
-      console.log('Pending order exists for session:', sessionToken);
-      return res.status(400).json({ error: 'A pending order already exists for this session' });
     }
     const order = new Order({
       tableNumber,
       items,
-      sessionToken,
       status: 'Pending'
     });
-    // Fallback: Ensure orderNumber is set
-    if (!order.orderNumber) {
-      const lastOrder = await Order.findOne({}, { orderNumber: 1 }).sort({ orderNumber: -1 }).lean();
-      order.orderNumber = lastOrder && lastOrder.orderNumber ? lastOrder.orderNumber + 1 : 1000;
-      console.log('Fallback orderNumber set in route:', order.orderNumber);
-    }
-    console.log('Order before save:', JSON.stringify(order.toObject(), null, 2));
     await order.save();
-    console.log('Order saved successfully:', JSON.stringify(order.toObject(), null, 2));
+    console.log('Order saved:', order);
     res.status(201).json(order);
   } catch (err) {
-    console.error('Error saving order:', err.message, err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error('Error saving order:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// GET /api/orders - Fetch orders with optional filters
+// GET /api/orders - Fetch orders with optional date filter
 router.get('/', async (req, res) => {
   try {
-    const { date, tableNumber, dateFrom, dateTo, sessionToken } = req.query;
+    const { date } = req.query;
     let query = {};
-
     if (date === 'today') {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -73,56 +45,41 @@ router.get('/', async (req, res) => {
     } else if (date === 'past48') {
       const start = new Date(Date.now() - 48 * 60 * 60 * 1000);
       query.createdAt = { $gte: start };
-    } else if (dateFrom && dateTo) {
-      query.createdAt = {
-        $gte: new Date(dateFrom),
-        $lte: new Date(new Date(dateTo).setHours(23, 59, 59, 999))
-      };
     }
-
-    if (tableNumber) {
-      query.tableNumber = parseInt(tableNumber);
-    }
-    if (sessionToken) {
-      query.sessionToken = sessionToken;
-    }
-
     const orders = await Order.find(query)
       .populate({
         path: 'items.itemId',
         match: { _id: { $exists: true } }
       })
-      .sort({ createdAt: -1 });
+      .sort(date === 'today' ? { createdAt: -1 } : {});
     const cleanedOrders = orders.map(order => ({
       ...order.toObject(),
       items: order.items.filter(item => item.itemId)
     }));
-    console.log('Orders sent:', cleanedOrders.length);
+    console.log('Orders sent:', cleanedOrders);
     res.json(cleanedOrders);
   } catch (err) {
-    console.error('Error fetching orders:', err.message, err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error('Error fetching orders:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
 // PUT /api/orders/:id - Update order
 router.put('/:id', async (req, res) => {
   try {
-    const { tableNumber, items, status, sessionToken } = req.body;
+    const { tableNumber, items, status } = req.body;
     const updateData = {};
     if (tableNumber) updateData.tableNumber = tableNumber;
     if (items) {
       for (const item of items) {
         const menuItem = await MenuItem.findById(item.itemId);
         if (!menuItem) {
-          console.log('Invalid itemId:', item.itemId);
           return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
         }
       }
       updateData.items = items;
     }
     if (status) updateData.status = status;
-    if (sessionToken) updateData.sessionToken = sessionToken;
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -131,16 +88,11 @@ router.put('/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    // Invalidate session if order is Prepared or Completed
-    if (status === 'Prepared' || status === 'Completed') {
-      await Session.updateOne({ sessionToken: order.sessionToken }, { isActive: false });
-      console.log('Session invalidated for token:', order.sessionToken);
-    }
     console.log('Order updated:', order);
     res.json(order);
   } catch (err) {
-    console.error('Error updating order:', err.message, err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error('Error updating order:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -154,8 +106,8 @@ router.delete('/:id', async (req, res) => {
     console.log('Order canceled:', order);
     res.json({ message: 'Order canceled' });
   } catch (err) {
-    console.error('Error canceling order:', err.message, err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error('Error canceling order:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -169,8 +121,10 @@ router.get('/analytics', async (req, res) => {
     weekStart.setHours(0, 0, 0, 0);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    // Fetch orders
     const orders = await Order.find({}).populate('items.itemId');
 
+    // Revenue
     const revenue = {
       today: 0,
       week: 0,
@@ -186,6 +140,7 @@ router.get('/analytics', async (req, res) => {
       }
     });
 
+    // Order Count
     const orderCount = {
       total: orders.filter(o => new Date(o.createdAt) >= todayStart).length,
       pending: orders.filter(o => new Date(o.createdAt) >= todayStart && o.status === 'Pending').length,
@@ -193,6 +148,7 @@ router.get('/analytics', async (req, res) => {
       completed: orders.filter(o => new Date(o.createdAt) >= todayStart && o.status === 'Completed').length
     };
 
+    // Top 5 Items (Month)
     const itemCountsMonth = {};
     orders
       .filter(o => new Date(o.createdAt) >= monthStart && o.status === 'Completed')
@@ -214,10 +170,11 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => b.quantity - b.quantity)
+      .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity, revenue: i.revenue }));
 
+    // Slow-Moving Items (Week)
     const itemCountsWeek = {};
     orders
       .filter(o => new Date(o.createdAt) >= weekStart && o.status === 'Completed')
@@ -242,6 +199,7 @@ router.get('/analytics', async (req, res) => {
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity }));
 
+    // Peak Hours (Today)
     const peakHours = Array(24).fill(0);
     orders
       .filter(o => new Date(o.createdAt) >= todayStart)
@@ -254,6 +212,7 @@ router.get('/analytics', async (req, res) => {
       orders: count
     }));
 
+    // Category Performance (Month)
     const categoryRevenue = {};
     orders
       .filter(o => new Date(o.createdAt) >= monthStart && o.status === 'Completed')
@@ -277,8 +236,8 @@ router.get('/analytics', async (req, res) => {
       categories: categoryData
     });
   } catch (err) {
-    console.error('Error fetching analytics:', err.message, err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error('Error fetching analytics:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
