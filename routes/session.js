@@ -9,48 +9,57 @@ router.post('/', async (req, res) => {
     if (!tableId || !sessionToken) {
       return res.status(400).json({ error: 'Table ID and session token are required' });
     }
-
-    // Check for existing active session
-    let session = await Session.findOne({ tableId, status: 'active' });
-    if (session) {
-      return res.json({ sessionToken: session.sessionToken });
-    }
-
-    // Create new session
-    session = new Session({
-      tableId,
+    const session = new Session({
+      tableId: parseInt(tableId),
       sessionToken,
-      status: 'active'
+      status: 'active',
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
     });
     await session.save();
-    console.log(`Session created for table ${tableId}: ${sessionToken}`);
+    console.log('Session created:', session);
     res.status(201).json({ sessionToken });
   } catch (err) {
-    console.error('Error creating session:', err);
+    console.error('Error saving session:', err);
     if (err.code === 11000) {
-      return res.status(409).json({ error: 'Session token already exists' });
+      return res.status(400).json({ error: 'Session token already exists' });
     }
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// GET /api/session-status?table=5&session=abc123 - Check session status
+// GET /api/session/status - Check session status
 router.get('/status', async (req, res) => {
   try {
-    const { table, mechanism } = req.query;
+    const { table, session } = req.query;
     if (!table || !session) {
-      return res.status(400).json({ status: 'invalid', error: 'Table and session token are required' });
+      return res.status(400).json({ error: 'Table ID and session token are required' });
     }
-
-    const sessionRecord = await Session.findOne({ tableId: parseInt(table), sessionToken: session });
-    if (!sessionRecord) {
-      return res.status(404).json({ status: 'invalid', error: 'Session not found' });
+    const sessionDoc = await Session.findOne({ tableId: parseInt(table), sessionToken: session });
+    if (!sessionDoc) {
+      return res.status(404).json({ error: 'Session not found' });
     }
-
-    res.json({ status: sessionRecord.status });
+    res.json({ status: sessionDoc.status });
   } catch (err) {
     console.error('Error checking session status:', err);
-    res.status(500).json({ status: 'invalid', error: 'Server error' });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/session/tables - Get list of available tables
+router.get('/tables', async (req, res) => {
+  try {
+    // Hardcoded list of tables (adjust as needed)
+    const tables = [
+      { tableId: 1 },
+      { tableId: 2 },
+      { tableId: 3 },
+      { tableId: 4 },
+      { tableId: 5 }
+    ];
+    res.json({ tables });
+  } catch (err) {
+    console.error('Error fetching tables:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
