@@ -2,23 +2,33 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
+const Session = require('../models/Session');
 
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
     console.log('Received order:', req.body);
-    const { tableNumber, items } = req.body;
-    if (!tableNumber || !items || items.length === 0) {
-      return res.status(400).json({ error: 'Invalid order data' });
+    const { tableNumber, items, sessionToken } = req.body;
+    if (!tableNumber || !items || items.length === 0 || !sessionToken) {
+      return res.status(400).json({ error: 'Invalid order data or missing session token' });
     }
+
+    // Validate session
+    const session = await Session.findOne({ tableNumber, token: sessionToken, isActive: true });
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired session. Please scan the QR code again.' });
+    }
+
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
     }
+
     const order = new Order({
       tableNumber,
+      sessionId: session._id,
       items,
       status: 'Pending'
     });
@@ -51,6 +61,7 @@ router.get('/', async (req, res) => {
         path: 'items.itemId',
         match: { _id: { $exists: true } }
       })
+      .populate('sessionId')
       .sort(date === 'today' ? { createdAt: -1 } : {});
     const cleanedOrders = orders.map(order => ({
       ...order.toObject(),
@@ -80,14 +91,22 @@ router.put('/:id', async (req, res) => {
       updateData.items = items;
     }
     if (status) updateData.status = status;
+
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true }
-    ).populate('items.itemId');
+    ).populate('items.itemId').populate('sessionId');
+
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    // Revoke session if status is changed to Prepared or Completed
+    if (status === 'Prepared' || status === 'Completed') {
+      await Session.findByIdAndUpdate(order.sessionId, { isActive: false });
+    }
+
     console.log('Order updated:', order);
     res.json(order);
   } catch (err) {
@@ -103,6 +122,8 @@ router.delete('/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+    // Revoke session on cancellation
+    await Session.findByIdAndUpdate(order.sessionId, { isActive: false });
     console.log('Order canceled:', order);
     res.json({ message: 'Order canceled' });
   } catch (err) {
@@ -195,7 +216,7 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => a.quantity - b.quantity)
+      .sort((a, b) => a.quantity - a.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity }));
 
