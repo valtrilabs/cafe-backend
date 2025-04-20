@@ -10,7 +10,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Table ID and session token are required' });
     }
 
-    // Check if there's an active session for the table
+    // Check for existing active session
     let session = await Session.findOne({ tableId, status: 'active' });
     if (session) {
       return res.json({ sessionToken: session.sessionToken });
@@ -23,9 +23,13 @@ router.post('/', async (req, res) => {
       status: 'active'
     });
     await session.save();
+    console.log(`Session created for table ${tableId}: ${sessionToken}`);
     res.status(201).json({ sessionToken });
   } catch (err) {
     console.error('Error creating session:', err);
+    if (err.code === 11000) {
+      return res.status(409).json({ error: 'Session token already exists' });
+    }
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -33,7 +37,7 @@ router.post('/', async (req, res) => {
 // GET /api/session-status?table=5&session=abc123 - Check session status
 router.get('/status', async (req, res) => {
   try {
-    const { table, session } = req.query;
+    const { table, mechanism } = req.query;
     if (!table || !session) {
       return res.status(400).json({ status: 'invalid', error: 'Table and session token are required' });
     }

@@ -29,7 +29,7 @@ router.post('/', async (req, res) => {
 
     // Create order
     const order = new Order({
-      tableNumber: parseInt(tableId),
+      tableId: parseInt(tableId),
       sessionId: session._id,
       items,
       status: 'Pending'
@@ -51,17 +51,15 @@ router.post('/', async (req, res) => {
 // GET /api/orders - Fetch orders with optional date filter
 router.get('/', async (req, res) => {
   try {
-    const { date } = req.query;
+    const { dateFrom, dateTo, status } = req.query;
     let query = {};
-    if (date === 'today') {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      end.setHours(23, 59, 59, 999);
-      query.createdAt = { $gte: start, $lte: end };
-    } else if (date === 'past48') {
-      const start = new Date(Date.now() - 48 * 60 * 60 * 1000);
-      query.createdAt = { $gte: start };
+    if (dateFrom && dateTo) {
+      query.createdAt = { $gte: new Date(dateFrom), $lte: new Date(dateTo) };
+    } else if (dateTo) {
+      query.createdAt = { $lte: new Date(dateTo) };
+    }
+    if (status) {
+      query.status = status;
     }
     const orders = await Order.find(query)
       .populate({
@@ -69,7 +67,7 @@ router.get('/', async (req, res) => {
         match: { _id: { $exists: true } }
       })
       .populate('sessionId')
-      .sort(date === 'today' ? { createdAt: -1 } : {});
+      .sort({ createdAt: -1 });
     const cleanedOrders = orders.map(order => ({
       ...order.toObject(),
       items: order.items.filter(item => item.itemId)
@@ -85,9 +83,9 @@ router.get('/', async (req, res) => {
 // PUT /api/orders/:id - Update order
 router.put('/:id', async (req, res) => {
   try {
-    const { tableNumber, items, status } = req.body;
+    const { tableId, items, status } = req.body;
     const updateData = {};
-    if (tableNumber) updateData.tableNumber = tableNumber;
+    if (tableId) updateData.tableId = tableId;
     if (items) {
       for (const item of items) {
         const menuItem = await MenuItem.findById(item.itemId);
