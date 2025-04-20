@@ -7,4 +7,7 @@ const sessionSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now, expires: '24h' }, // Sessions expire after 24 hours
 });
 
-module.exports = mongoose.model('Session', sessionSchema);
+const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
+
+
+module.exports = Session;
