@@ -2,29 +2,72 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
+const Session = require('../models/Session');
+
+// Middleware to validate session token
+const restrictAccess = async (req, res, next) => {
+  try {
+    const token = req.headers['x-session-token'] || req.body.token;
+    if (!token) {
+      return res.status(401).json({ error: 'Session token is required' });
+    }
+
+    const session = await Session.findOne({ token, isActive: true });
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    // Check if session has expired (1 hour)
+    const expiryTime = new Date(session.createdAt.getTime() + 60 * 60 * 1000);
+    if (new Date() > expiryTime) {
+      session.isActive = false;
+      await session.save();
+      return res.status(401).json({ error: 'Session expired' });
+    }
+
+    req.session = session;
+    next();
+  } catch (err) {
+    console.error('Error validating session:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
 
 // POST /api/orders - Create a new order
-router.post('/', async (req, res) => {
+router.post('/', restrictAccess, async (req, res) => {
   try {
     console.log('Received order:', req.body);
-    const { tableNumber, items } = req.body;
-    if (!tableNumber || !items || items.length === 0) {
-      return res.status(400).json({ error: 'Invalid order data' });
+    const { tableNumber, items, token } = req.body;
+    if (!tableNumber || !items || items.length === 0 || !token) {
+      return res.status(400).json({ error: 'Invalid order data or token' });
     }
+
+    // Validate session
+    const session = await Session.findOne({ token, tableNumber, isActive: true });
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
     for (const item of items) {
       const menuItem = await MenuItem.findById(item.itemId);
       if (!menuItem) {
         return res.status(400).json({ error: `Invalid itemId: ${item.itemId}` });
       }
     }
+
     const order = new Order({
       tableNumber,
       items,
       status: 'Pending'
     });
     await order.save();
+
+    // Link order to session
+    session.orderId = order._id;
+    await session.save();
+
     console.log('Order saved:', order);
-    res.status(201).json(order);
+    res.status(201).json({ orderNumber: order.orderNumber });
   } catch (err) {
     console.error('Error saving order:', err);
     res.status(500).json({ error: 'Server error' });
@@ -80,6 +123,7 @@ router.put('/:id', async (req, res) => {
       updateData.items = items;
     }
     if (status) updateData.status = status;
+
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -88,6 +132,12 @@ router.put('/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    // Invalidate session if order is Prepared or Completed
+    if (['Prepared', 'Completed'].includes(status)) {
+      await Session.updateOne({ orderId: order._id }, { isActive: false });
+    }
+
     console.log('Order updated:', order);
     res.json(order);
   } catch (err) {
@@ -103,6 +153,8 @@ router.delete('/:id', async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+    // Invalidate session if order is canceled
+    await Session.updateOne({ orderId: order._id }, { isActive: false });
     console.log('Order canceled:', order);
     res.json({ message: 'Order canceled' });
   } catch (err) {
@@ -195,7 +247,7 @@ router.get('/analytics', async (req, res) => {
         ...data
       }))
       .filter(i => i.item)
-      .sort((a, b) => a.quantity - b.quantity)
+      .sort((a, b) => a.quantity - a.quantity)
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity }));
 

@@ -1,8 +1,38 @@
 const express = require('express');
 const router = express.Router();
 const MenuItem = require('../models/MenuItem');
+const Session = require('../models/Session');
 const multer = require('multer');
 const path = require('path');
+
+// Middleware to validate session token
+const restrictAccess = async (req, res, next) => {
+  try {
+    const token = req.headers['x-session-token'] || req.query.token;
+    if (!token) {
+      return res.status(401).json({ error: 'Session token is required' });
+    }
+
+    const session = await Session.findOne({ token, isActive: true });
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    // Check if session has expired (1 hour)
+    const expiryTime = new Date(session.createdAt.getTime() + 60 * 60 * 1000);
+    if (new Date() > expiryTime) {
+      session.isActive = false;
+      await session.save();
+      return res.status(401).json({ error: 'Session expired' });
+    }
+
+    req.session = session;
+    next();
+  } catch (err) {
+    console.error('Error validating session:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -28,8 +58,8 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
-// GET /api/menu - Fetch all menu items
-router.get('/', async (req, res) => {
+// GET /api/menu - Fetch all menu items (requires session)
+router.get('/', restrictAccess, async (req, res) => {
   try {
     const menuItems = await MenuItem.find();
     console.log('Menu items sent:', menuItems);
