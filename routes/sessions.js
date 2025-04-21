@@ -109,4 +109,46 @@ router.get('/validate', async (req, res) => {
   }
 });
 
+// GET /api/sessions/latest/:tableNumber - Get the latest active session token for a table
+router.get('/latest/:tableNumber', async (req, res) => {
+  try {
+    const { tableNumber } = req.params;
+    const tableNum = Number(tableNumber);
+    if (isNaN(tableNum) || tableNum < 1) {
+      console.error('Invalid tableNumber:', tableNumber);
+      return res.status(400).json({ error: 'Valid table number is required' });
+    }
+
+    console.log(`Fetching latest session for table ${tableNum}`);
+    let session = await Session.findOne({ tableNumber: tableNum, isActive: true })
+      .sort({ createdAt: -1 });
+
+    if (!session) {
+      console.log(`No active session for table ${tableNum}. Creating new session.`);
+      const token = uuidv4();
+      session = new Session({ tableNumber: tableNum, token, orderId: null });
+      await session.save();
+      console.log(`New session created for table ${tableNum}: ${token}`);
+    }
+
+    // Check if session has expired
+    const expiryTime = new Date(session.createdAt.getTime() + 60 * 60 * 1000);
+    if (new Date() > expiryTime) {
+      session.isActive = false;
+      await session.save();
+      console.log(`Session expired for token: ${session.token}`);
+      const token = uuidv4();
+      session = new Session({ tableNumber: tableNum, token, orderId: null });
+      await session.save();
+      console.log(`New session created for table ${tableNum}: ${token}`);
+    }
+
+    console.log(`Returning latest token for table ${tableNum}: ${session.token}`);
+    res.json({ token: session.token });
+  } catch (err) {
+    console.error('Error fetching latest session:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
