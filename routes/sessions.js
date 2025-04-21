@@ -27,6 +27,16 @@ router.post('/', async (req, res) => {
       throw err;
     });
 
+    // Clean up old inactive sessions (older than 24 hours)
+    const expiryThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await Session.deleteMany(
+      { tableNumber, isActive: false, createdAt: { $lt: expiryThreshold } },
+      { session }
+    ).catch(err => {
+      console.error(`Error cleaning up old sessions for table ${tableNumber}:`, err);
+      throw err;
+    });
+
     // Create new session
     const token = uuidv4();
     const newSession = new Session({ tableNumber, token });
@@ -64,9 +74,14 @@ router.get('/validate', async (req, res) => {
     }
 
     const session = await Session.findOne({ token }).populate('orderId');
-    if (!session || !session.isActive) {
-      console.log(`Invalid or inactive session for token: ${token}`);
+    if (!session) {
+      console.log(`No session found for token: ${token}`);
       return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    if (!session.isActive) {
+      console.log(`Inactive session for token: ${token}`);
+      return res.status(401).json({ error: 'Session expired or order prepared. Please scan QR code again' });
     }
 
     // Check if session has expired (1 hour)
@@ -75,10 +90,10 @@ router.get('/validate', async (req, res) => {
       session.isActive = false;
       await session.save();
       console.log(`Session expired for token: ${token}`);
-      return res.status(401).json({ error: 'Session expired' });
+      return res.status(401).json({ error: 'Session expired. Please scan QR code again' });
     }
 
-    // Check if order is prepared or completed
+    // Check if order exists and is prepared or completed
     if (session.orderId && ['Prepared', 'Completed'].includes(session.orderId.status)) {
       session.isActive = false;
       await session.save();
