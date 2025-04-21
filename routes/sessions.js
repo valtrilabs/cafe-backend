@@ -17,7 +17,7 @@ router.post('/', async (req, res) => {
 
     console.log(`Creating session for table ${tableNumber}`);
 
-    // Invalidate existing active session for the table
+    // Invalidate existing active session
     await Session.updateMany(
       { tableNumber, isActive: true },
       { isActive: false },
@@ -39,7 +39,7 @@ router.post('/', async (req, res) => {
 
     // Create new session
     const token = uuidv4();
-    const newSession = new Session({ tableNumber, token });
+    const newSession = new Session({ tableNumber, token, orderId: null });
     await newSession.save({ session }).catch(err => {
       console.error(`Error saving session for table ${tableNumber}:`, err);
       if (err.code === 11000) {
