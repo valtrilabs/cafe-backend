@@ -9,65 +9,87 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://cafeuser:cafepass123@
   // ... rest of the script remains the same
 
 const menuItems = [
-  // Main Course
-  { name: "Veggie Sandwich", category: "Main Course", price: 100, description: "", isAvailable: true },
-  { name: "Grilled Chicken Wrap", category: "Main Course", price: 120, description: "", isAvailable: true },
-  { name: "Pasta Primavera", category: "Main Course", price: 110, description: "", isAvailable: true },
-  { name: "BBQ Burger", category: "Main Course", price: 130, description: "", isAvailable: true },
-  { name: "Paneer Tikka Roll", category: "Main Course", price: 115, description: "", isAvailable: true },
-  { name: "Fish Tacos", category: "Main Course", price: 125, description: "", isAvailable: true },
-  { name: "Veggie Pizza", category: "Main Course", price: 140, description: "", isAvailable: true },
-  { name: "Chicken Alfredo", category: "Main Course", price: 135, description: "", isAvailable: true },
-  { name: "Mushroom Risotto", category: "Main Course", price: 130, description: "", isAvailable: true },
-  { name: "Lamb Kebab", category: "Main Course", price: 150, description: "", isAvailable: true },
+  // Burger
+  { name: "Regular Burger", category: "Burger", price: 70, description: "", isAvailable: true },
+  { name: "Veg Burger", category: "Burger", price: 80, description: "", isAvailable: true },
+  { name: "Veg. Cheese Burger", category: "Burger", price: 90, description: "", isAvailable: true },
+  { name: "Schezwan Burger", category: "Burger", price: 90, description: "", isAvailable: true },
+  { name: "Schezwan Cheese Burger", category: "Burger", price: 100, description: "", isAvailable: true },
+  { name: "G-Saheb Sp. Burger", category: "Burger", price: 110, description: "", isAvailable: true },
 
-  // Drinks
-  { name: "Green Smoothie", category: "Drinks", price: 50, description: "Spinach, banana, almond milk", isAvailable: true },
-  { name: "Iced Latte", category: "Drinks", price: 45, description: "Espresso with cold milk", isAvailable: true },
-  { name: "Mango Lassi", category: "Drinks", price: 40, description: "Yogurt-based mango drink", isAvailable: true },
-  { name: "Lemon Mint Cooler", category: "Drinks", price: 35, description: "Refreshing lemon and mint", isAvailable: true },
-  { name: "Chai Latte", category: "Drinks", price: 45, description: "Spiced tea with milk", isAvailable: true },
-  { name: "Strawberry Milkshake", category: "Drinks", price: 50, description: "Creamy strawberry shake", isAvailable: true },
-  { name: "Coconut Water", category: "Drinks", price: 30, description: "Fresh coconut water", isAvailable: true },
-  { name: "Hot Chocolate", category: "Drinks", price: 40, description: "Rich cocoa drink", isAvailable: true },
-  { name: "Ginger Ale", category: "Drinks", price: 35, description: "Sparkling ginger soda", isAvailable: true },
-  { name: "Orange Juice", category: "Drinks", price: 35, description: "Freshly squeezed oranges", isAvailable: true },
+   // Pizza
+   { name: "Margherita Pizza", category: "Pizza", price: 120, description: "", isAvailable: true },
+   { name: "Golden Corn Pizza", category: "Pizza", price: 120, description: "", isAvailable: true },
+   { name: "Cheese Paneer Pizza", category: "Pizza", price: 130, description: "", isAvailable: true },
+   { name: "Italian Pizza", category: "Pizza", price: 150, description: "", isAvailable: true },
+   { name: "American Pizza", category: "Pizza", price: 160, description: "", isAvailable: true },
+   { name: "Veg. Garden Pizza", category: "Pizza", price: 160, description: "", isAvailable: true },
+   { name: "Peri Peri Paneer Pizza", category: "Pizza", price: 170, description: "", isAvailable: true },
+   { name: "G-Saheb Sp. Pizza", category: "Pizza", price: 180, description: "", isAvailable: true },
+   { name: "Makhani Paneer Pizza", category: "Pizza", price: 180, description: "", isAvailable: true },
 
-  // Street Food
-  { name: "Pani Puri", category: "Street Food", price: 60, description: "Crispy puris with spicy water", isAvailable: true },
-  { name: "Vada Pav", category: "Street Food", price: 50, description: "Spiced potato in a bun", isAvailable: true },
-  { name: "Samosa", category: "Street Food", price: 40, description: "Fried pastry with spiced filling", isAvailable: true },
-  { name: "Bhel Puri", category: "Street Food", price: 55, description: "Puffed rice with chutneys", isAvailable: true },
-  { name: "Chicken Momos", category: "Street Food", price: 70, description: "Steamed dumplings with chicken", isAvailable: true },
-  { name: "Aloo Tikki", category: "Street Food", price: 45, description: "Spiced potato patties", isAvailable: true },
-  { name: "Dahi Vada", category: "Street Food", price: 50, description: "Lentil dumplings in yogurt", isAvailable: true },
-  { name: "Pav Bhaji", category: "Street Food", price: 65, description: "Spiced veggie mash with bread", isAvailable: true },
-  { name: "Sev Puri", category: "Street Food", price: 55, description: "Crispy puris with toppings", isAvailable: true },
-  { name: "Kathi Roll", category: "Street Food", price: 70, description: "Spiced meat in flatbread", isAvailable: true },
+    // Pasta
+   { name: "Vegetable Pasta", category: "Pasta", price: 90, description: "", isAvailable: true },
+   { name: "Creamy White Pasta", category: "Pasta", price: 110, description: "", isAvailable: true },
+   { name: "Pink Pasta", category: "Pasta", price: 120, description: "", isAvailable: true },
+   { name: "Makhani Souce Pasta", category: "Pasta", price: 130, description: "", isAvailable: true },
 
-  // Salads
-  { name: "Caesar Salad", category: "Salads", price: 80, description: "Romaine with Caesar dressing", isAvailable: true },
-  { name: "Greek Salad", category: "Salads", price: 85, description: "Feta, olives, and cucumber", isAvailable: true },
-  { name: "Quinoa Salad", category: "Salads", price: 90, description: "Quinoa with veggies", isAvailable: true },
-  { name: "Caprese Salad", category: "Salads", price: 80, description: "Tomato, mozzarella, basil", isAvailable: true },
-  { name: "Chicken Salad", category: "Salads", price: 95, description: "Grilled chicken with greens", isAvailable: true },
-  { name: "Kale Salad", category: "Salads", price: 85, description: "Kale with lemon dressing", isAvailable: true },
-  { name: "Waldorf Salad", category: "Salads", price: 90, description: "Apples, walnuts, celery", isAvailable: true },
-  { name: "Beet Salad", category: "Salads", price: 80, description: "Beets with goat cheese", isAvailable: true },
-  { name: "Cobb Salad", category: "Salads", price: 95, description: "Egg, bacon, avocado", isAvailable: true },
-  { name: "Spinach Salad", category: "Salads", price: 85, description: "Spinach with berries", isAvailable: true },
+    // Garlic Bread
+   { name: "Cheese Garlic Bread", category: "Garlic Bread", price: 100, description: "", isAvailable: true },
+   { name: "Cheese Chili Gralic Bread", category: "Garlic Bread", price: 110, description: "", isAvailable: true },
+   { name: "Corn Gralic Bread", category: "Garlic Bread", price: 110, description: "", isAvailable: true },
+   { name: "Supreme Gralic Bread", category: "Garlic Bread", price: 120, description: "", isAvailable: true },
 
-  // Desserts
-  { name: "Chocolate Cake", category: "Desserts", price: 60, description: "Rich chocolate sponge", isAvailable: true },
-  { name: "Tiramisu", category: "Desserts", price: 65, description: "Coffee-flavored layered dessert", isAvailable: true },
-  { name: "Cheesecake", category: "Desserts", price: 60, description: "Creamy cheesecake with crust", isAvailable: true },
-  { name: "Gulab Jamun", category: "Desserts", price: 50, description: "Sweet dumplings in syrup", isAvailable: true },
-  { name: "Ice Cream Sundae", category: "Desserts", price: 55, description: "Vanilla ice cream with toppings", isAvailable: true },
-  { name: "Rasmalai", category: "Desserts", price: 50, description: "Cheese dumplings in milk", isAvailable: true },
-  { name: "Brownie", category: "Desserts", price: 45, description: "Fudgy chocolate brownie", isAvailable: true },
-  { name: "Mango Sorbet", category: "Desserts", price: 50, description: "Refreshing mango ice", isAvailable: true },
-  { name: "Panna Cotta", category: "Desserts", price: 60, description: "Creamy vanilla dessert", isAvailable: true },
-  { name: "Apple Pie", category: "Desserts", price: 55, description: "Warm pie with apple filling", isAvailable: true }
+    // Fries
+   { name: "Regular Fries", category: "Fries", price: 70, description: "", isAvailable: true },
+   { name: "Peri Peri Fries", category: "Fries", price: 80, description: "", isAvailable: true },
+   { name: "Peri Peri Cheese Fries", category: "Fries", price: 100, description: "", isAvailable: true },
+
+    // Vadapav
+   { name: "Regular Vadapav", category: "Vadapav", price: 30, description: "", isAvailable: true },
+   { name: "Masala Vadapav", category: "Vadapav", price: 40, description: "", isAvailable: true },
+   { name: "Schezwan Vadapav", category: "Vadapav", price: 40, description: "", isAvailable: true },
+   { name: "Cheese Vadapav", category: "Vadapav", price: 50, description: "", isAvailable: true },
+   { name: "Cheese Schezwan Vadapav ", category: "Vadapav", price: 60, description: "", isAvailable: true },
+
+    // Regular Sandwich
+   { name: "Bread Butter", category: "Regular Sandwich", price: 40, description: "", isAvailable: true },
+   { name: "Bread Butter Jam", category: "Regular Sandwich", price: 50, description: "", isAvailable: true },
+   { name: "Cheese Jam", category: "Regular Sandwich", price: 70, description: "", isAvailable: true },
+   { name: "Vegetable Sandwich", category: "Regular Sandwich", price: 70, description: "", isAvailable: true },
+   { name: "Vegetable Cheese Sandwich ", category: "Regular Sandwich", price: 100, description: "", isAvailable: true },
+
+    // Grilled Sandwich
+   { name: "Cheese Butter Grilled", category: "Grilled Sandwich", price: 50, description: "", isAvailable: true },
+   { name: "Masala Sandwich", category: "Grilled Sandwich", price: 60, description: "", isAvailable: true },
+   { name: "Vegetable Grilled", category: "Grilled Sandwich", price: 80, description: "", isAvailable: true },
+   { name: "Cheese Masala", category: "Grilled Sandwich", price: 90, description: "", isAvailable: true },
+   { name: "Jungle Sandwich ", category: "Grilled Sandwich", price: 90, description: "", isAvailable: true },
+   { name: "Vegetable Cheese Grilled ", category: "Grilled Sandwich", price: 110, description: "", isAvailable: true },
+   { name: "Cheese Jungle ", category: "Grilled Sandwich", price: 120, description: "", isAvailable: true },
+   { name: "3 Layer Club ", category: "Grilled Sandwich", price: 130, description: "", isAvailable: true },
+   { name: "3 Layer Cheese Loaded Club  ", category: "Grilled Sandwich", price: 150, description: "", isAvailable: true },
+
+  // Shake
+  { name: "Cold Coffee", category: "Shake", price: 70, description: "", isAvailable: true },
+  { name: "Vanila Shake", category: "Shake", price: 80, description: "", isAvailable: true },
+  { name: "Kit-Kat Shake", category: "Shake", price: 110, description: "", isAvailable: true },
+  { name: "Chocolate Shake", category: "Shake", price: 110, description: "", isAvailable: true },
+  { name: "Oreo Shake", category: "Shake", price: 120, description: "", isAvailable: true },
+
+  // Mocktail
+  { name: "Orange Fantasy", category: "Mocktail", price: 60, description: "", isAvailable: true },
+  { name: "Blue Blossom", category: "Mocktail", price: 60, description: "", isAvailable: true },
+  { name: "Crazy Fruit", category: "Mocktail", price: 60, description: "", isAvailable: true },
+
+  // Mojito
+  { name: "Vergin Mojito", category: "Mojito", price: 70, description: "", isAvailable: true },
+  { name: "Mint Mojito", category: "Mojito", price: 70, description: "", isAvailable: true },
+  { name: "Orange Mojito", category: "Mojito", price: 70, description: "", isAvailable: true },
+  { name: "Blue Lagoon Mojito", category: "Mojito", price: 70, description: "", isAvailable: true },
+  { name: "Fruite Sp.", category: "Mojito", price: 70, description: "", isAvailable: true },
+
+
 ];
 
 async function seedMenu() {
