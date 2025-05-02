@@ -172,6 +172,7 @@ router.get('/analytics', async (req, res) => {
     weekStart.setDate(now.getDate() - now.getDay());
     weekStart.setHours(0, 0, 0, 0);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const yearStart = new Date(now.getFullYear(), 0, 1);
 
     // Fetch orders
     const orders = await Order.find({}).populate('items.itemId');
@@ -192,13 +193,30 @@ router.get('/analytics', async (req, res) => {
       }
     });
 
-    // Order Count
-    const orderCount = {
-      total: orders.filter(o => new Date(o.createdAt) >= todayStart).length,
-      pending: orders.filter(o => new Date(o.createdAt) >= todayStart && o.status === 'Pending').length,
-      prepared: orders.filter(o => new Date(o.createdAt) >= todayStart && o.status === 'Prepared').length,
-      completed: orders.filter(o => new Date(o.createdAt) >= todayStart && o.status === 'Completed').length
+    // Order Counts
+    const orderCounts = {
+      today: { total: 0, pending: 0, prepared: 0, completed: 0 },
+      week: { total: 0, pending: 0, prepared: 0, completed: 0 },
+      month: { total: 0, pending: 0, prepared: 0, completed: 0 },
+      year: { total: 0, pending: 0, prepared: 0, completed: 0 }
     };
+    orders.forEach(order => {
+      const orderDate = new Date(order.createdAt);
+      const periods = [
+        { name: 'today', start: todayStart },
+        { name: 'week', start: weekStart },
+        { name: 'month', start: monthStart },
+        { name: 'year', start: yearStart }
+      ];
+      periods.forEach(period => {
+        if (orderDate >= period.start) {
+          orderCounts[period.name].total += 1;
+          if (order.status === 'Pending') orderCounts[period.name].pending += 1;
+          if (order.status === 'Prepared') orderCounts[period.name].prepared += 1;
+          if (order.status === 'Completed') orderCounts[period.name].completed += 1;
+        }
+      });
+    });
 
     // Top 5 Items (Month)
     const itemCountsMonth = {};
@@ -226,31 +244,6 @@ router.get('/analytics', async (req, res) => {
       .slice(0, 5)
       .map(i => ({ name: i.item.name, quantity: i.quantity, revenue: i.revenue }));
 
-    // Slow-Moving Items (Week)
-    const itemCountsWeek = {};
-    orders
-      .filter(o => new Date(o.createdAt) >= weekStart && o.status === 'Completed')
-      .forEach(order => {
-        order.items.forEach(item => {
-          if (item.itemId) {
-            const itemId = item.itemId._id.toString();
-            itemCountsWeek[itemId] = (itemCountsWeek[itemId] || { quantity: 0 });
-            itemCountsWeek[itemId].quantity += item.quantity;
-          }
-        });
-      });
-    const slowItems = Object.entries(itemCountsWeek)
-      .map(([itemId, data]) => ({
-        item: orders
-          .flatMap(o => o.items)
-          .find(i => i.itemId && i.itemId._id.toString() === itemId).itemId,
-        ...data
-      }))
-      .filter(i => i.item)
-      .sort((a, b) => a.quantity - a.quantity)
-      .slice(0, 5)
-      .map(i => ({ name: i.item.name, quantity: i.quantity }));
-
     // Peak Hours (Today)
     const peakHours = Array(24).fill(0);
     orders
@@ -265,27 +258,57 @@ router.get('/analytics', async (req, res) => {
     }));
 
     // Category Performance (Month)
-    const categoryRevenue = {};
+    const categoryStats = {};
     orders
       .filter(o => new Date(o.createdAt) >= monthStart && o.status === 'Completed')
       .forEach(order => {
         order.items.forEach(item => {
           if (item.itemId) {
             const category = item.itemId.category || 'Uncategorized';
-            categoryRevenue[category] = (categoryRevenue[category] || 0) + (item.quantity * item.itemId.price);
+            categoryStats[category] = categoryStats[category] || { revenue: 0, orders: new Set() };
+            categoryStats[category].revenue += item.quantity * item.itemId.price;
+            categoryStats[category].orders.add(order._id.toString());
           }
         });
       });
-    const categoryData = Object.entries(categoryRevenue)
-      .map(([name, revenue]) => ({ name, revenue }));
+    const categoryData = Object.entries(categoryStats)
+      .map(([name, stats]) => ({
+        name,
+        revenue: stats.revenue,
+        orders: stats.orders.size
+      }));
+
+    // Payment Methods (Month)
+    const paymentMethods = {};
+    orders
+      .filter(o => new Date(o.createdAt) >= monthStart && o.status === 'Completed')
+      .forEach(order => {
+        const method = order.paymentMethod || 'Unknown';
+        const total = order.items.reduce((sum, item) => sum + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0);
+        paymentMethods[method] = (paymentMethods[method] || 0) + total;
+      });
+
+    // Repeat Orders (Month)
+    const customerOrders = {};
+    orders
+      .filter(o => new Date(o.createdAt) >= monthStart && o.status === 'Completed')
+      .forEach(order => {
+        if (order.customerId) {
+          customerOrders[order.customerId] = (customerOrders[order.customerId] || 0) + 1;
+        }
+      });
+    const repeatCustomers = Object.values(customerOrders).filter(count => count > 1).length;
+    const totalCustomers = Object.keys(customerOrders).length;
+    const repeatOrderPercentage = totalCustomers ? (repeatCustomers / totalCustomers * 100).toFixed(2) : 0;
 
     res.json({
       revenue,
-      orderCount,
+      orderCounts,
       topItems,
-      slowItems,
       peakHours: peakHoursData,
-      categories: categoryData
+      categories: categoryData,
+      paymentMethods,
+      repeatOrderPercentage
     });
   } catch (err) {
     console.error('Error fetching analytics:', err);
