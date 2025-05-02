@@ -77,11 +77,21 @@ router.post('/', restrictAccess, async (req, res) => {
 // GET /api/orders - Fetch orders with optional status and date filter
 router.get('/', async (req, res) => {
   try {
-    const { status, date } = req.query;
+    const { status, date, tableNumber } = req.query;
     let query = {};
+    
+    // Handle status filter (support multiple statuses via comma-separated list)
     if (status) {
-      query.status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+      const statusArray = status.split(',').map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
+      query.status = { $in: statusArray };
     }
+    
+    // Handle tableNumber filter
+    if (tableNumber) {
+      query.tableNumber = Number(tableNumber);
+    }
+
+    // Handle date filter
     if (date === 'today') {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -92,6 +102,7 @@ router.get('/', async (req, res) => {
       const start = new Date(Date.now() - 48 * 60 * 60 * 1000);
       query.createdAt = { $gte: start };
     }
+
     const orders = await Order.find(query)
       .populate({
         path: 'items.itemId',
