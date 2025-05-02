@@ -70,6 +70,17 @@ router.get('/', restrictAccess, async (req, res) => {
   }
 });
 
+// GET /api/menu/operator - Fetch all menu items for operators (no authentication)
+router.get('/operator', async (req, res) => {
+  try {
+    const menuItems = await MenuItem.find();
+    res.json(menuItems);
+  } catch (err) {
+    console.error('Error fetching menu for operator:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/menu - Create a new menu item with optional image
 router.post('/', upload.single('image'), async (req, res) => {
   try {
