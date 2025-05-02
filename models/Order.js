@@ -10,6 +10,7 @@ const orderSchema = new mongoose.Schema({
     }
   ],
   status: { type: String, default: 'Pending', enum: ['Pending', 'Prepared', 'Completed'] },
+  paymentMethod: { type: String, enum: ['Cash', 'UPI', 'Card', 'Other', null], default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

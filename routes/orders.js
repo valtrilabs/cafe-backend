@@ -74,11 +74,14 @@ router.post('/', restrictAccess, async (req, res) => {
   }
 });
 
-// GET /api/orders - Fetch orders with optional date filter
+// GET /api/orders - Fetch orders with optional status and date filter
 router.get('/', async (req, res) => {
   try {
-    const { date } = req.query;
+    const { status, date } = req.query;
     let query = {};
+    if (status) {
+      query.status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    }
     if (date === 'today') {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -110,7 +113,7 @@ router.get('/', async (req, res) => {
 // PUT /api/orders/:id - Update order
 router.put('/:id', async (req, res) => {
   try {
-    const { tableNumber, items, status } = req.body;
+    const { tableNumber, items, status, paymentMethod } = req.body;
     const updateData = {};
     if (tableNumber) updateData.tableNumber = tableNumber;
     if (items) {
@@ -123,6 +126,14 @@ router.put('/:id', async (req, res) => {
       updateData.items = items;
     }
     if (status) updateData.status = status;
+    if (paymentMethod) {
+      if (!['Cash', 'UPI', 'Card', 'Other'].includes(paymentMethod)) {
+        return res.status(400).json({ error: `Invalid paymentMethod: ${paymentMethod}` });
+      }
+      updateData.paymentMethod = paymentMethod;
+    } else if (status === 'Completed') {
+      return res.status(400).json({ error: 'paymentMethod is required for Completed status' });
+    }
 
     const order = await Order.findByIdAndUpdate(
       req.params.id,
