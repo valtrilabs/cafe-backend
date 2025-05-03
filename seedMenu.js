@@ -2,8 +2,9 @@ const mongoose = require('mongoose');
 const MenuItem = require('./models/MenuItem');
 
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://cafeuser:cafepass123@cluster0.kggh8.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
-    .then(() => console.log('Connected to MongoDB for seeding'))
+// mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://cafeuser:cafepass123@cluster0.kggh8.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://cafeuser:cafepass123@cluster0.kggh8.mongodb.net/cafe_db?retryWrites=true&w=majority&appName=Cluster0')
+.then(() => console.log('Connected to MongoDB for seeding'))
     .catch(err => console.error('MongoDB connection error:', err));
   
   // ... rest of the script remains the same
