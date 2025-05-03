@@ -33,7 +33,49 @@ const restrictAccess = async (req, res, next) => {
   }
 };
 
-// POST /api/orders - Create a new order
+// Categories for each printer
+const printer1Categories = [
+  'Main Course', 'Street Food', 'Salads', 'Desserts'
+];
+const printer2Categories = ['Drinks'];
+
+// Function to generate KOT content for an 80mm thermal printer (32 chars per line)
+const generateKOT = (order, items, printerName) => {
+  const maxLineLength = 32; // 80mm printer, ~32 chars per line with default font
+  const header = `=== GSaheb Cafe KOT ===`;
+  const footer = `=========================`;
+  const orderInfo = [
+    `Order #: ${order.orderNumber}`,
+    `Table #: ${order.tableNumber}`,
+    `Time: ${new Date(order.createdAt).toLocaleString('en-IN', { hour12: true })}`,
+    `Printer: ${printerName}`,
+    `-------------------------`
+  ];
+
+  // Item list
+  const itemLines = items.map(item => {
+    const itemName = item.itemId.name;
+    const qty = item.quantity.toString();
+    // Truncate item name if too long, leave space for qty
+    const maxNameLength = maxLineLength - qty.length - 5; // 5 for " x " and padding
+    const truncatedName = itemName.length > maxNameLength 
+      ? itemName.substring(0, maxNameLength - 3) + '...' 
+      : itemName.padEnd(maxNameLength, ' ');
+    return `${truncatedName} x ${qty}`;
+  });
+
+  // Combine all parts
+  const kotContent = [
+    header,
+    ...orderInfo,
+    ...itemLines,
+    footer
+  ].join('\n');
+
+  return kotContent;
+};
+
+// POST /api/orders - Create a new order and store KOT content
 router.post('/', restrictAccess, async (req, res) => {
   try {
     console.log('Received order:', req.body);
@@ -66,10 +108,73 @@ router.post('/', restrictAccess, async (req, res) => {
     session.orderId = order._id;
     await session.save();
 
-    console.log('Order saved:', order);
+    // Populate order items for KOT generation
+    const populatedOrder = await Order.findById(order._id).populate('items.itemId');
+
+    // Split items by category for each printer
+    const printer1Items = populatedOrder.items.filter(item => 
+      printer1Categories.includes(item.itemId.category)
+    );
+    const printer2Items = populatedOrder.items.filter(item => 
+      printer2Categories.includes(item.itemId.category)
+    );
+
+    // Generate and store KOT content
+    if (printer1Items.length > 0) {
+      const kotContent = generateKOT(populatedOrder, printer1Items, 'Kitchen Section 1');
+      populatedOrder.kotPrinter1 = { content: kotContent, printed: false };
+    }
+    if (printer2Items.length > 0) {
+      const kotContent = generateKOT(populatedOrder, printer2Items, 'Kitchen Section 2');
+      populatedOrder.kotPrinter2 = { content: kotContent, printed: false };
+    }
+    await populatedOrder.save();
+
+    console.log('Order saved with KOTs:', populatedOrder);
     res.status(201).json({ orderNumber: order.orderNumber });
   } catch (err) {
     console.error('Error saving order:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/orders/pending-kots - Fetch orders with unprinted KOTs
+router.get('/pending-kots', async (req, res) => {
+  try {
+    const orders = await Order.find({
+      $or: [
+        { 'kotPrinter1.printed': false, 'kotPrinter1.content': { $exists: true } },
+        { 'kotPrinter2.printed': false, 'kotPrinter2.content': { $exists: true } }
+      ]
+    }).populate('items.itemId');
+    res.json(orders);
+  } catch (err) {
+    console.error('Error fetching pending KOTs:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/orders/mark-kot-printed - Mark a KOT as printed
+router.post('/mark-kot-printed', async (req, res) => {
+  try {
+    const { orderId, printer } = req.body;
+    if (!orderId || !printer) {
+      return res.status(400).json({ error: 'orderId and printer are required' });
+    }
+
+    const updateField = printer === 'Printer 1' ? 'kotPrinter1.printed' : 'kotPrinter2.printed';
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { [updateField]: true },
+      { new: true }
+    );
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json({ message: `KOT for ${printer} marked as printed` });
+  } catch (err) {
+    console.error('Error marking KOT as printed:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

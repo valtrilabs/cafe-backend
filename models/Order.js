@@ -11,7 +11,15 @@ const orderSchema = new mongoose.Schema({
   ],
   status: { type: String, default: 'Pending', enum: ['Pending', 'Prepared', 'Completed'] },
   paymentMethod: { type: String, enum: ['Cash', 'UPI', 'Card', 'Other', null], default: null },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  kotPrinter1: {
+    content: String, // KOT content for Printer 1
+    printed: { type: Boolean, default: false } // Printing status
+  },
+  kotPrinter2: {
+    content: String, // KOT content for Printer 2
+    printed: { type: Boolean, default: false } // Printing status
+  }
 });
 
 orderSchema.pre('save', async function (next) {
