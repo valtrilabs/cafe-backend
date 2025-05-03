@@ -90,6 +90,36 @@ const menuItems = [
   { name: "Blue Lagoon Mojito", category: "Mojito", price: 70, description: "", isAvailable: true },
   { name: "Fruite Sp.", category: "Mojito", price: 70, description: "", isAvailable: true },
 
+  // Soup 
+  { name: "Veg. Soup", category: "Soup", price: 70, description: "", isAvailable: true },
+  { name: "Manchurian Soup", category: "Soup", price: 80, description: "", isAvailable: true },
+  { name: "Ginger Soup", category: "Soup", price: 90, description: "", isAvailable: true },
+  { name: "Hot & Sour Soup", category: "Soup", price: 100, description: "", isAvailable: true },
+  { name: "G-Saheb Sp. Soup", category: "Soup", price: 120, description: "", isAvailable: true },
+
+  // Chinese 
+  { name: "Chinese Bhel", category: "Chinese", price: 120, description: "", isAvailable: true },
+  { name: "Manchurian Bhel", category: "Chinese", price: 80, description: "", isAvailable: true },
+  { name: "Dry. Manchurian", category: "Chinese", price: 120, description: "", isAvailable: true },
+  { name: "Gravy Manchurian", category: "Chinese", price: 130, description: "", isAvailable: true },
+  { name: "Dragon Potato", category: "Chinese", price: 130, description: "", isAvailable: true },
+  { name: "Paneer Chilli Dry", category: "Chinese", price: 150, description: "", isAvailable: true },
+
+  { name: "Veg. Fride Rice", category: "Chinese", price: 110, description: "", isAvailable: true },
+  { name: "Manchurian Fride Rice", category: "Chinese", price: 120, description: "", isAvailable: true },
+  { name: "Triple Fride Rice", category: "Chinese", price: 130, description: "", isAvailable: true },
+  { name: "Schezwan Fride Rice", category: "Chinese", price: 130, description: "", isAvailable: true },
+  { name: "Singapuri Fride Rice", category: "Chinese", price: 140, description: "", isAvailable: true },
+  { name: "Paneer Fride Rice", category: "Chinese", price: 150, description: "", isAvailable: true },
+  { name: "G-Saheb Sp. Rice", category: "Chinese", price: 200, description: "", isAvailable: true },
+  
+  { name: "Hakka Noodles", category: "Chinese", price: 110, description: "", isAvailable: true },
+  { name: "Manchurian Noodles", category: "Chinese", price: 120, description: "", isAvailable: true },
+  { name: "Schezwan Noodles", category: "Chinese", price: 130, description: "", isAvailable: true },
+  { name: "Singapuri Noodles", category: "Chinese", price: 140, description: "", isAvailable: true },
+  { name: "Paneer Noodles", category: "Chinese", price: 150, description: "", isAvailable: true },
+  { name: "G-Saheb Sp. Noodles", category: "Chinese", price: 200, description: "", isAvailable: true },
+
 
 ];
 
