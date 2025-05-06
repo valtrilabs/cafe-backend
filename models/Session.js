@@ -5,11 +5,6 @@ const sessionSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
-  token: {
-    type: String,
-    required: true,
-    unique: true,
-  },
   isActive: {
     type: Boolean,
     default: true,
