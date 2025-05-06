@@ -5,16 +5,19 @@ const Session = require('../models/Session');
 const multer = require('multer');
 const path = require('path');
 
-// Middleware to validate session token
+// Middleware to validate session using sessionId
 const restrictAccess = async (req, res, next) => {
   try {
-    const token = req.headers['x-session-token'] || req.query.token;
-    if (!token) {
-      return res.status(401).json({ error: 'Session token is required' });
+    const sessionId = req.headers['x-session-id'] || req.query.sessionId;
+    if (!sessionId) {
+      console.log('Session ID missing in request');
+      return res.status(401).json({ error: 'Session ID is required' });
     }
 
-    const session = await Session.findOne({ token, isActive: true });
-    if (!session) {
+    console.log(`Validating session with sessionId: ${sessionId}`);
+    const session = await Session.findById(sessionId);
+    if (!session || !session.isActive) {
+      console.log(`Invalid or inactive session for sessionId: ${sessionId}`);
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
@@ -23,13 +26,14 @@ const restrictAccess = async (req, res, next) => {
     if (new Date() > expiryTime) {
       session.isActive = false;
       await session.save();
+      console.log(`Session expired for sessionId: ${sessionId}`);
       return res.status(401).json({ error: 'Session expired' });
     }
 
     req.session = session;
     next();
   } catch (err) {
-    console.error('Error validating session:', err);
+    console.error('Error validating session:', err.message, err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -61,11 +65,12 @@ const upload = multer({
 // GET /api/menu - Fetch all menu items (requires session)
 router.get('/', restrictAccess, async (req, res) => {
   try {
+    console.log('Fetching menu items for session:', req.session._id);
     const menuItems = await MenuItem.find();
     console.log('Menu items sent:', menuItems);
     res.json(menuItems);
   } catch (err) {
-    console.error('Error fetching menu:', err);
+    console.error('Error fetching menu:', err.message, err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -73,10 +78,12 @@ router.get('/', restrictAccess, async (req, res) => {
 // GET /api/menu/operator - Fetch all menu items for operators (no authentication)
 router.get('/operator', async (req, res) => {
   try {
+    console.log('Fetching menu items for operator');
     const menuItems = await MenuItem.find();
+    console.log('Menu items sent to operator:', menuItems);
     res.json(menuItems);
   } catch (err) {
-    console.error('Error fetching menu for operator:', err);
+    console.error('Error fetching menu for operator:', err.message, err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -86,6 +93,7 @@ router.post('/', upload.single('image'), async (req, res) => {
   try {
     const { name, category, price, description, isAvailable } = req.body;
     if (!name || !category || !price) {
+      console.log('Missing required fields:', { name, category, price });
       return res.status(400).json({ error: 'Name, category, and price are required' });
     }
     const menuItem = new MenuItem({
@@ -100,7 +108,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     console.log('Menu item saved:', menuItem);
     res.status(201).json(menuItem);
   } catch (err) {
-    console.error('Error saving menu item:', err);
+    console.error('Error saving menu item:', err.message, err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -121,12 +129,13 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       new: true,
     });
     if (!menuItem) {
+      console.log(`Menu item not found for id: ${req.params.id}`);
       return res.status(404).json({ error: 'Menu item not found' });
     }
     console.log('Menu item updated:', menuItem);
     res.json(menuItem);
   } catch (err) {
-    console.error('Error updating menu item:', err);
+    console.error('Error updating menu item:', err.message, err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -136,12 +145,13 @@ router.delete('/:id', async (req, res) => {
   try {
     const menuItem = await MenuItem.findByIdAndDelete(req.params.id);
     if (!menuItem) {
+      console.log(`Menu item not found for id: ${req.params.id}`);
       return res.status(404).json({ error: 'Menu item not found' });
     }
     console.log('Menu item deleted:', menuItem);
     res.json({ message: 'Menu item deleted' });
   } catch (err) {
-    console.error('Error deleting menu item:', err);
+    console.error('Error deleting menu item:', err.message, err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 });

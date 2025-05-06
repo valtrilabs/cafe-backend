@@ -5,19 +5,18 @@ const menuItemSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  category: {
+  description: {
     type: String,
-    required: true,
   },
   price: {
     type: Number,
     required: true,
   },
-  description: {
+  category: {
     type: String,
   },
   image: {
-    type: String, // Stores the path to the image (e.g., '/uploads/filename.jpg')
+    type: String,
   },
   isAvailable: {
     type: Boolean,
