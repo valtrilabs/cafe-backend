@@ -5,6 +5,11 @@ const sessionSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  orderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    default: null,
+  },
   isActive: {
     type: Boolean,
     default: true,
@@ -13,14 +18,6 @@ const sessionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-  orderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order',
-  },
-}, {
-  indexes: [
-    { key: { tableNumber: 1, isActive: 1 }, unique: true },
-  ],
 });
 
 module.exports = mongoose.model('Session', sessionSchema);
