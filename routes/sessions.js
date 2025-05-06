@@ -50,7 +50,7 @@ router.post('/', async (req, res) => {
 
     await session.commitTransaction();
     console.log(`Session created for table ${tableNumber}: ${token}`);
-    res.status(201).json({ token });
+    res.status(201).json({ sessionId: newSession._id }); // Changed to return sessionId
   } catch (err) {
     await session.abortTransaction();
     console.error('Error creating session:', err.message, err.stack);
