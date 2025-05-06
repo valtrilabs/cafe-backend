@@ -25,6 +25,7 @@ router.post('/', async (req, res) => {
       console.error(`Error updating sessions for table ${tableNumber}:`, err);
       throw err;
     });
+    console.log(`Invalidated existing sessions for table ${tableNumber}`);
 
     // Clean up old inactive sessions (older than 24 hours)
     const expiryThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -35,6 +36,7 @@ router.post('/', async (req, res) => {
       console.error(`Error cleaning up old sessions for table ${tableNumber}:`, err);
       throw err;
     });
+    console.log(`Cleaned up old sessions for table ${tableNumber}`);
 
     // Create new session
     const newSession = new Session({ tableNumber, orderId: null });
@@ -42,10 +44,20 @@ router.post('/', async (req, res) => {
       console.error(`Error saving session for table ${tableNumber}:`, err);
       throw err;
     });
+    console.log(`New session saved:`, newSession);
 
     await session.commitTransaction();
-    console.log(`Session created for table ${tableNumber}`);
-    res.status(201).json({ sessionId: newSession._id });
+    console.log(`Session created for table ${tableNumber}, sessionId: ${newSession._id}`);
+
+    // Verify the session exists after transaction commit
+    const savedSession = await Session.findById(newSession._id);
+    if (!savedSession) {
+      console.error(`Session not found after creation for table ${tableNumber}, sessionId: ${newSession._id}`);
+      throw new Error('Session creation failed');
+    }
+    console.log(`Session verified after creation:`, savedSession);
+
+    res.status(201).json({ sessionId: newSession._id.toString() });
   } catch (err) {
     await session.abortTransaction();
     console.error('Error creating session:', err.message, err.stack);
@@ -64,7 +76,9 @@ router.get('/:sessionId', async (req, res) => {
       return res.status(400).json({ error: 'Session ID is required' });
     }
 
+    console.log(`Validating session with sessionId: ${sessionId}`);
     const session = await Session.findById(sessionId).populate('orderId');
+    console.log(`Session lookup result:`, session);
     if (!session) {
       console.log(`No session found for sessionId: ${sessionId}`);
       return res.status(401).json({ error: 'Invalid or expired session' });
