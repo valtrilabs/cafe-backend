@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
-const Menu = require('../models/Menu');
+const MenuItem = require('../models/MenuItem'); // Updated to MenuItem
 const Session = require('../models/Session');
 const mongoose = require('mongoose');
 
@@ -118,7 +118,7 @@ router.get('/validate', async (req, res) => {
   }
 });
 
-// Analytics (unchanged, included for completeness)
+// Analytics
 router.get('/analytics', async (req, res) => {
   try {
     const now = new Date();
