@@ -1,32 +1,49 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-  tableNumber: { type: Number, required: true },
-  orderNumber: { type: Number, unique: true },
-  items: [
-    {
-      itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem', required: true },
-      quantity: { type: Number, required: true }
-    }
-  ],
-  status: { type: String, default: 'Pending', enum: ['Pending', 'Prepared', 'Completed'] },
-  paymentMethod: { type: String, enum: ['Cash', 'UPI', 'Card', 'Other', null], default: null },
-  createdAt: { type: Date, default: Date.now },
-  kotPrinter1: {
-    content: String, // KOT content for Printer 1
-    printed: { type: Boolean, default: false } // Printing status
+  tableNumber: {
+    type: Number,
+    required: true,
+    min: 1
   },
-  kotPrinter2: {
-    content: String, // KOT content for Printer 2
-    printed: { type: Boolean, default: false } // Printing status
+  items: [{
+    itemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Menu',
+      required: true
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1
+    }
+  }],
+  status: {
+    type: String,
+    enum: ['Pending', 'Prepared', 'Completed', 'Paid'],
+    default: 'Pending'
+  },
+  orderNumber: {
+    type: Number,
+    required: true,
+    unique: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 });
 
 orderSchema.pre('save', async function (next) {
-  if (!this.orderNumber) {
-    const lastOrder = await this.constructor.findOne().sort({ orderNumber: -1 });
-    this.orderNumber = lastOrder && lastOrder.orderNumber ? lastOrder.orderNumber + 1 : 1000;
+  if (this.isNew) {
+    const lastOrder = await mongoose.model('Order').findOne().sort({ orderNumber: -1 });
+    this.orderNumber = lastOrder ? lastOrder.orderNumber + 1 : 1000;
   }
+  this.updatedAt = Date.now();
   next();
 });
 
