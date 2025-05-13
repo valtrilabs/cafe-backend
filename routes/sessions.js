@@ -1,31 +1,44 @@
 const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
-// Create or get a session for a table
+// Create a new session for a table
 router.post('/', async (req, res) => {
+  const { tableNumber } = req.body;
+  if (!tableNumber || isNaN(tableNumber) || tableNumber < 1 || tableNumber > 6) {
+    return res.status(400).json({ message: 'Invalid table number' });
+  }
+
   try {
-    const { tableNumber } = req.body;
-    if (!tableNumber || tableNumber < 1 || tableNumber > 6) {
-      return res.status(400).json({ error: 'Invalid table number' });
-    }
-    let session = await Session.findOne({ tableNumber });
+    // Check if an active session exists for the table
+    let session = await Session.findOne({ tableNumber, isActive: true });
     if (session) {
-      // Session exists, return existing token
-      return res.json({ token: session.token, tableNumber });
+      return res.json({ token: session.token });
     }
-    // Create new session
-    const token = uuidv4();
+
+    // Create a new session
+    const token = crypto.randomBytes(16).toString('hex');
     session = new Session({ tableNumber, token });
     await session.save();
-    res.json({ token, tableNumber });
+    res.json({ token });
   } catch (error) {
-    if (error.code === 11000) {
-      res.status(400).json({ error: 'Session already exists for this table' });
-    } else {
-      res.status(500).json({ error: error.message });
+    console.error('Error creating session:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Validate a session token
+router.get('/validate/:token', async (req, res) => {
+  try {
+    const session = await Session.findOne({ token: req.params.token, isActive: true });
+    if (!session) {
+      return res.status(401).json({ message: 'Invalid or expired session' });
     }
+    res.json({ tableNumber: session.tableNumber, orderId: session.orderId });
+  } catch (error) {
+    console.error('Error validating session:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

@@ -1,220 +1,155 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
-const MenuItem = require('../models/MenuItem'); // Updated to MenuItem
 const Session = require('../models/Session');
-const mongoose = require('mongoose');
+const MenuItem = require('../models/MenuItem');
 
-const authenticateOperator = (req, res, next) => {
-  const token = req.headers['x-operator-token'];
-  if (token === process.env.OPERATOR_TOKEN) {
-    next();
-  } else {
-    res.status(401).json({ error: 'Unauthorized' });
-  }
-};
-
-// Validate session token and table number
+// Middleware to validate session token
 const validateSession = async (req, res, next) => {
-  const { token, tableNumber } = req.headers['x-session-token'] ? JSON.parse(req.headers['x-session-token']) : {};
-  if (!token || !tableNumber) {
-    return res.status(401).json({ error: 'Invalid or missing session token' });
+  const token = req.headers['x-session-token'];
+  if (!token) {
+    return res.status(401).json({ message: 'Session token required' });
   }
   try {
-    const session = await Session.findOne({ tableNumber: Number(tableNumber), token });
+    const session = await Session.findOne({ token, isActive: true });
     if (!session) {
-      return res.status(401).json({ error: 'Invalid session' });
+      return res.status(401).json({ message: 'Invalid or expired session' });
     }
     req.session = session;
     next();
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error validating session:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Get all orders
-router.get('/', async (req, res) => {
-  try {
-    const { status, tableNumber } = req.query;
-    const query = {};
-    if (status) query.status = { $in: status.split(',') };
-    if (tableNumber) query.tableNumber = Number(tableNumber);
-    const orders = await Order.find(query).populate('items.itemId');
-    res.json(orders);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Create a new order
 router.post('/', validateSession, async (req, res) => {
+  const { tableNumber, items } = req.body;
+  if (!tableNumber || !items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Invalid order data' });
+  }
+  if (tableNumber !== req.session.tableNumber) {
+    return res.status(403).json({ message: 'Table number mismatch' });
+  }
+
   try {
-    const { tableNumber, items } = req.body;
-    if (tableNumber !== req.session.tableNumber) {
-      return res.status(400).json({ error: 'Table number mismatch' });
+    // Validate items
+    const itemIds = items.map(item => item.itemId);
+    const menuItems = await MenuItem.find({ _id: { $in: itemIds } });
+    if (menuItems.length !== itemIds.length) {
+      return res.status(400).json({ message: 'Some items are invalid' });
     }
+
+    // Create order
+    const orderNumber = Math.floor(1000 + Math.random() * 9000);
     const order = new Order({
       tableNumber,
       items,
+      orderNumber,
       status: 'Pending'
     });
     await order.save();
-    await Session.updateOne({ _id: req.session._id }, { orderId: order._id });
-    res.status(201).json(order);
+
+    // Update session with orderId
+    req.session.orderId = order._id;
+    req.session.isActive = true;
+    await req.session.save();
+
+    res.json({ orderId: order._id, orderNumber, message: 'Order placed successfully' });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error('Error placing order:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Update order status
-router.put('/:id/status', authenticateOperator, async (req, res) => {
+// Update an existing order
+router.put('/:id', validateSession, async (req, res) => {
+  const { items } = req.body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Invalid order data' });
+  }
+
   try {
-    const { status } = req.body;
     const order = await Order.findById(req.params.id);
     if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ message: 'Order not found' });
     }
-    order.status = status;
+    if (order.tableNumber !== req.session.tableNumber || order._id.toString() !== req.session.orderId.toString()) {
+      return res.status(403).json({ message: 'Unauthorized to edit this order' });
+    }
+    if (order.status === 'Paid') {
+      return res.status(403).json({ message: 'Cannot edit a paid order' });
+    }
+
+    // Validate items
+    const itemIds = items.map(item => item.itemId);
+    const menuItems = await MenuItem.find({ _id: { $in: itemIds } });
+    if (menuItems.length !== itemIds.length) {
+      return res.status(400).json({ message: 'Some items are invalid' });
+    }
+
+    order.items = items;
     await order.save();
-    res.json(order);
+    res.json({ orderId: order._id, orderNumber: order.orderNumber, message: 'Order updated successfully' });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error('Error updating order:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
 // Mark order as paid
-router.put('/:id/mark-paid', authenticateOperator, async (req, res) => {
+router.post('/:id/paid', async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ message: 'Order not found' });
     }
+    if (order.status === 'Paid') {
+      return res.status(400).json({ message: 'Order already paid' });
+    }
+
     order.status = 'Paid';
     await order.save();
+
     // Invalidate session
-    await Session.deleteOne({ orderId: order._id });
+    await Session.updateMany(
+      { orderId: order._id, isActive: true },
+      { isActive: false }
+    );
+
+    res.json({ message: 'Order marked as paid' });
+  } catch (error) {
+    console.error('Error marking order as paid:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get order details
+router.get('/:id', validateSession, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).populate('items.itemId');
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    if (order.tableNumber !== req.session.tableNumber || order._id.toString() !== req.session.orderId.toString()) {
+      return res.status(403).json({ message: 'Unauthorized to view this order' });
+    }
     res.json(order);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error('Error fetching order:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Validate order and session
-router.get('/validate', async (req, res) => {
+// Get all orders (for dashboards)
+router.get('/', async (req, res) => {
   try {
-    const { orderId, tableNumber, token } = req.query;
-    const session = await Session.findOne({ tableNumber: Number(tableNumber), token, orderId });
-    if (!session) {
-      return res.status(401).json({ valid: false, redirect: '/scan-qr' });
-    }
-    const order = await Order.findById(orderId).populate('items.itemId');
-    if (!order || order.status === 'Paid') {
-      await Session.deleteOne({ _id: session._id });
-      return res.status(401).json({ valid: false, redirect: '/scan-qr' });
-    }
-    res.json({ valid: true, order });
+    const orders = await Order.find().populate('items.itemId').sort({ createdAt: -1 });
+    res.json(orders);
   } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Analytics
-router.get('/analytics', async (req, res) => {
-  try {
-    const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0));
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay());
-    weekStart.setHours(0, 0, 0, 0);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const yearStart = new Date(now.getFullYear(), 0, 1);
-
-    const orders = await Order.find({ status: 'Completed' }).populate('items.itemId');
-
-    const analytics = {
-      revenue: {
-        today: 0,
-        week: 0,
-        month: 0
-      },
-      orderCounts: {
-        today: { total: 0, pending: 0, prepared: 0, completed: 0 },
-        week: { total: 0, pending: 0, prepared: 0, completed: 0 },
-        month: { total: 0, pending: 0, completed: 0 },
-        year: { total: 0, pending: 0, prepared: 0, completed: 0 }
-      },
-      topItems: [],
-      peakHours: Array(24).fill().map((_, i) => ({ hour: i, orders: 0 })),
-      categories: [],
-      paymentMethods: {},
-      repeatOrderPercentage: 0
-    };
-
-    const itemSales = {};
-    const categorySales = {};
-
-    orders.forEach(order => {
-      const orderDate = new Date(order.createdAt);
-      const total = order.items.reduce((sum, item) => sum + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0);
-
-      // Revenue
-      if (orderDate >= todayStart) analytics.revenue.today += total;
-      if (orderDate >= weekStart) analytics.revenue.week += total;
-      if (orderDate >= monthStart) analytics.revenue.month += total;
-
-      // Order counts
-      const periods = [
-        { start: todayStart, key: 'today' },
-        { start: weekStart, key: 'week' },
-        { start: monthStart, key: 'month' },
-        { start: yearStart, key: 'year' }
-      ];
-      periods.forEach(period => {
-        if (orderDate >= period.start) {
-          analytics.orderCounts[period.key].total++;
-          if (order.status === 'Pending') analytics.orderCounts[period.key].pending++;
-          if (order.status === 'Prepared') analytics.orderCounts[period.key].prepared++;
-          if (order.status === 'Completed') analytics.orderCounts[period.key].completed++;
-        }
-      });
-
-      // Peak hours
-      if (orderDate >= todayStart) {
-        const hour = orderDate.getHours();
-        analytics.peakHours[hour].orders++;
-      }
-
-      // Item and category sales
-      order.items.forEach(item => {
-        if (item.itemId) {
-          const itemId = item.itemId._id.toString();
-          itemSales[itemId] = itemSales[itemId] || { name: item.itemId.name, quantity: 0, revenue: 0 };
-          itemSales[itemId].quantity += item.quantity;
-          itemSales[itemId].revenue += item.quantity * item.itemId.price;
-
-          const category = item.itemId.category || 'Uncategorized';
-          categorySales[category] = categorySales[category] || { name: category, revenue: 0, orders: 0 };
-          categorySales[category].revenue += item.quantity * item.itemId.price;
-          categorySales[category].orders += item.quantity;
-        }
-      });
-    });
-
-    // Top items
-    analytics.topItems = Object.values(itemSales)
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
-
-    // Categories
-    analytics.categories = Object.values(categorySales);
-
-    // Placeholder for payment methods and repeat orders
-    analytics.paymentMethods = { Cash: analytics.revenue.month }; // Update when paymentMethod is added
-    analytics.repeatOrderPercentage = 0; // Update when customerId is added
-
-    res.json(analytics);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

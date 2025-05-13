@@ -5,24 +5,27 @@ const sessionSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 1,
-    max: 6 // Assuming 6 tables
-  },
-  orderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order'
+    max: 6
   },
   token: {
     type: String,
-    required: true
+    required: true,
+    unique: true
+  },
+  orderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    default: null
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   },
   createdAt: {
     type: Date,
     default: Date.now,
-    expires: '24h' // Sessions expire after 24 hours
+    expires: 7200 // Sessions expire after 2 hours
   }
 });
-
-// Ensure only one active session per table
-sessionSchema.index({ tableNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model('Session', sessionSchema);
